@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -40,7 +41,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import androidx.compose.material.icons.filled.Stop
 
 @Composable
 fun DevicesScreen(
@@ -49,16 +49,12 @@ fun DevicesScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    // Запрос разрешений при первом показе. Прослушивание запускается в MainViewModel.init.
     LaunchedEffect(Unit) {
         onRequestPermissions()
     }
 
-    // При уходе с экрана — остановить обновление списка (прослушивание продолжается).
     DisposableEffect(Unit) {
-        onDispose {
-            viewModel.stopRefresh()
-        }
+        onDispose { viewModel.stopRefresh() }
     }
 
     var devicesExpanded by rememberSaveable { mutableStateOf(true) }
@@ -74,7 +70,6 @@ fun DevicesScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // 1. Кнопка «Обновить список устройств» + таймер + статус прослушивания
         item(key = "header_refresh") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -82,11 +77,8 @@ fun DevicesScreen(
             ) {
                 Button(
                     onClick = {
-                        if (state.isRefreshingList) {
-                            viewModel.stopRefresh()
-                        } else {
-                            viewModel.refreshDeviceList()
-                        }
+                        if (state.isRefreshingList) viewModel.stopRefresh()
+                        else viewModel.refreshDeviceList()
                     },
                     modifier = Modifier.weight(1f)
                 ) {
@@ -119,7 +111,6 @@ fun DevicesScreen(
             Spacer(Modifier.height(16.dp))
         }
 
-        // 3. Чекбокс + список (только если раскрыто)
         if (devicesExpanded) {
             item(key = "only_bthome") {
                 Row(
@@ -178,7 +169,6 @@ fun DevicesScreen(
             }
         }
 
-        // 4. Разделитель и «Выбранное устройство»
         item(key = "divider") {
             Spacer(Modifier.height(16.dp))
             Divider()
@@ -191,7 +181,6 @@ fun DevicesScreen(
             )
         }
 
-        // 5. Карточка выбранного
         item(key = "selected_card") {
             val reading = state.lastReading
             if (reading == null) {
@@ -212,11 +201,13 @@ fun DevicesScreen(
                     )
                 }
             } else {
-                SelectedDeviceCard(reading)
+                SelectedDeviceCard(
+                    reading = reading,
+                    isStale = MainViewModel.isStale(reading)
+                )
             }
         }
 
-        // 6. Ошибка
         if (state.error != null) {
             item(key = "error") {
                 Spacer(Modifier.height(12.dp))
@@ -229,8 +220,6 @@ fun DevicesScreen(
     }
 }
 
-/* ------------------------------------------------------------------------- */
-/*                     Вспомогательные composable-функции                    */
 /* ------------------------------------------------------------------------- */
 
 @Composable
@@ -311,7 +300,7 @@ fun RssiBadge(rssi: Int) {
 }
 
 @Composable
-fun SelectedDeviceCard(reading: BthomeData) {
+fun SelectedDeviceCard(reading: BthomeData, isStale: Boolean) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -329,19 +318,31 @@ fun SelectedDeviceCard(reading: BthomeData) {
                 fontSize = 18.sp
             )
             Spacer(Modifier.height(4.dp))
-            Text(
-                "Обновлено ${formatElapsed(elapsedSec)} назад",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+
+            val updatedText = "Обновлено ${formatElapsed(elapsedSec)} назад"
+            if (isStale) {
+                Text(
+                    "Устарело: $updatedText",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Medium
+                )
+            } else {
+                Text(
+                    updatedText,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                BigValue("Температура", reading.temperature?.let { "%.1f °C".format(it) } ?: "—")
-                BigValue("Влажность", reading.humidity?.let { "%.1f %%".format(it) } ?: "—")
-                BigValue("Батарея", reading.battery?.let { "$it %" } ?: "—")
+                BigValue("Температура", reading.temperature?.let { "%.1f °C".format(it) } ?: "—", isStale)
+                BigValue("Влажность", reading.humidity?.let { "%.1f %%".format(it) } ?: "—", isStale)
+                BigValue("Батарея", reading.battery?.let { "$it %" } ?: "—", isStale)
             }
             Spacer(Modifier.height(12.dp))
             Text(
@@ -355,15 +356,22 @@ fun SelectedDeviceCard(reading: BthomeData) {
 }
 
 @Composable
-fun BigValue(label: String, value: String) {
+fun BigValue(label: String, value: String, isStale: Boolean) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(
+            value,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (isStale) MaterialTheme.colorScheme.onSurfaceVariant
+            else MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
 fun formatElapsed(sec: Long): String = when {
     sec < 60 -> "$sec сек"
     sec < 3600 -> "${sec / 60} мин"
-    else -> "${sec / 3600} ч"
+    sec < 86400 -> "${sec / 3600} ч"
+    else -> "${sec / 86400} дн"
 }

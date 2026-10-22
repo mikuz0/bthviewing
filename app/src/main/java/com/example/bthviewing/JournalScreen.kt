@@ -2,7 +2,6 @@ package com.example.bthviewing
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,7 +17,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -48,7 +47,8 @@ import java.util.Locale
 fun JournalScreen(
     currentDeviceAddress: String?,
     currentDeviceName: String?,
-    viewModel: JournalViewModel = viewModel()
+    viewModel: JournalViewModel = viewModel(),
+    mainViewModel: MainViewModel
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -56,9 +56,14 @@ fun JournalScreen(
         viewModel.setTarget(currentDeviceAddress, currentDeviceName)
     }
 
+    LaunchedEffect(state.isReading) {
+        if (!state.isReading) {
+            mainViewModel.startListening()
+        }
+    }
+
     var tab by remember { mutableStateOf(0) }
 
-    // --- SAF launcher для сохранения CSV ---
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(mimeType = "text/csv")
     ) { uri ->
@@ -67,7 +72,6 @@ fun JournalScreen(
         }
     }
 
-    // Автоскрытие сообщения об экспорте
     LaunchedEffect(state.exportMessage) {
         if (state.exportMessage != null) {
             delay(3000)
@@ -83,10 +87,12 @@ fun JournalScreen(
         )
         Spacer(Modifier.height(8.dp))
 
-        // --- Кнопки действий ---
         Row(verticalAlignment = Alignment.CenterVertically) {
             Button(
-                onClick = { viewModel.startRead() },
+                onClick = {
+                    mainViewModel.stopListening()
+                    viewModel.startRead()
+                },
                 enabled = state.deviceAddress != null && !state.isReading
             ) {
                 Text(if (state.isReading) "Чтение…" else "Считать данные")
@@ -95,10 +101,13 @@ fun JournalScreen(
                 Spacer(Modifier.width(12.dp))
                 OutlinedButton(
                     onClick = { viewModel.cancelRead() },
+                    enabled = !state.isCancelling,
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
                     )
-                ) { Text("Отменить") }
+                ) {
+                    Text(if (state.isCancelling) "Остановка…" else "Отменить")
+                }
             }
             Spacer(Modifier.width(12.dp))
             OutlinedButton(
@@ -120,7 +129,6 @@ fun JournalScreen(
             }
         }
 
-        // Сообщение об экспорте
         state.exportMessage?.let {
             Spacer(Modifier.height(6.dp))
             Text(
@@ -138,7 +146,20 @@ fun JournalScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(modifier = Modifier.height(24.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("  Прочитано: ${state.records.size}")
+                Column {
+                    Text(
+                        text = state.phase ?: "Чтение…",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (state.records.isNotEmpty()) {
+                        Text(
+                            "Прочитано: ${state.records.size}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
 
@@ -177,7 +198,7 @@ fun RecordsTable(records: List<MemoRecord>) {
             Text("T, °C", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Text("H, %", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
         }
-        Divider()
+        HorizontalDivider()
         LazyColumn {
             items(records) { r ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {

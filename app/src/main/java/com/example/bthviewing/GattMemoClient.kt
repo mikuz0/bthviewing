@@ -11,6 +11,7 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
@@ -20,8 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 class GattMemoClient(private val context: Context) {
@@ -35,17 +35,37 @@ class GattMemoClient(private val context: Context) {
 
         const val ALL_RECORDS = 0xFFFF
 
-        private const val PRE_CONNECT_DELAY_MS = 2000L
-        private const val READ_TIMEOUT_MS = 90_000L
+        /** Пауза перед connectGatt. */
+        private const val PRE_CONNECT_DELAY_MS = 500L
+
+        /** Таймаут проверки отклика (0x00 DEVID). */
+        private const val PROBE_TIMEOUT_MS = 5_000L
+
+        /** Таймаут чтения истории. 10 минут. */
+        private const val READ_TIMEOUT_MS = 600_000L
     }
 
-    private val connectionLock = Mutex()
+    @Volatile
+    private var activeCancel: (() -> Unit)? = null
+
+    @Volatile
+    private var probeDeferred: CompletableDeferred<Unit>? = null
 
     sealed class Event {
+        data object Probe : Event()
         data class Progress(val recordsRead: Int) : Event()
         data class Record(val record: MemoRecord) : Event()
         data object Done : Event()
+        data object Cancelled : Event()
         data class Error(val message: String) : Event()
+    }
+
+    fun cancel() {
+        try {
+            activeCancel?.invoke()
+        } catch (e: Exception) {
+            Log.w(TAG, "cancel()", e)
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -53,9 +73,8 @@ class GattMemoClient(private val context: Context) {
         device: BluetoothDevice,
         maxRecords: Int = ALL_RECORDS
     ): Flow<Event> = callbackFlow {
-        connectionLock.withLock {
-            Log.d(TAG, "start readHistory ${device.address}, cnt=$maxRecords")
-        }
+        BleMutex.mutex.lock()
+        Log.d(TAG, "start readHistory ${device.address}, cnt=$maxRecords")
 
         var gatt: BluetoothGatt? = null
         var recordsRead = 0
@@ -69,11 +88,30 @@ class GattMemoClient(private val context: Context) {
             try { g.close() } catch (_: Exception) {}
         }
 
-        fun finish(error: String? = null) {
+        fun releaseMutex() {
+            try {
+                BleMutex.mutex.unlock()
+            } catch (_: Exception) {
+                // уже разблокирован
+            }
+        }
+
+        fun finish(error: String? = null, cancelled: Boolean = false) {
             if (finished) return
             finished = true
+            activeCancel = null
+            val probe = probeDeferred
+            probeDeferred = null
             closeGatt()
-            if (error != null) trySend(Event.Error(error)) else trySend(Event.Done)
+            releaseMutex()
+            when {
+                error != null -> trySend(Event.Error(error))
+                cancelled -> trySend(Event.Cancelled)
+                else -> trySend(Event.Done)
+            }
+            if (probe != null && !probe.isCompleted) {
+                probe.completeExceptionally(CancellationException("closed"))
+            }
             close()
         }
 
@@ -82,11 +120,14 @@ class GattMemoClient(private val context: Context) {
             finish(error = message)
         }
 
+        // Регистрируем cancel() с самого начала — до connectGatt,
+        // чтобы пользователь мог отменить на фазе «Подключение…»
+        activeCancel = { finish(cancelled = true) }
+
         val callback = object : BluetoothGattCallback() {
 
             override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
                 Log.d(TAG, "onConnectionStateChange status=$status newState=$newState")
-
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     if (status == 133) {
                         fail("Ошибка BLE 133. Убедитесь, что датчик не подключён к другому телефону/ПК, и повторите через 3-5 секунд.")
@@ -95,10 +136,14 @@ class GattMemoClient(private val context: Context) {
                     }
                     return
                 }
-
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
                         connected = true
+                        try {
+                            g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "requestConnectionPriority", e)
+                        }
                         if (!g.discoverServices()) {
                             fail("discoverServices() не запустился")
                         }
@@ -106,7 +151,7 @@ class GattMemoClient(private val context: Context) {
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         if (!finished) {
                             fail(
-                                if (connected) "Устройство отключилось во время чтения (возможно, ушло в сон или другой централ подключился)"
+                                if (connected) "Устройство отключилось во время чтения"
                                 else "Не удалось подключиться"
                             )
                         }
@@ -120,24 +165,21 @@ class GattMemoClient(private val context: Context) {
                 }
                 val service = g.getService(SERVICE_FCD2)
                 if (service == null) {
-                    fail("Сервис 0xFCD2 не найден. Это не BTHome-устройство?"); return
+                    fail("Сервис 0xFCD2 не найден"); return
                 }
                 val ch = service.getCharacteristic(CHAR_CMD)
                 if (ch == null) {
                     fail("Характеристика 0xFFF4 не найдена"); return
                 }
-
                 if (!g.setCharacteristicNotification(ch, true)) {
                     fail("setCharacteristicNotification() вернул false"); return
                 }
                 val desc = ch.getDescriptor(CCCD)
                 if (desc == null) {
-                    sendReadCommand(g, ch, maxRecords)
+                    // без CCCD — пробуем сразу probe
+                    doProbeAndRead(g, ch, maxRecords)
                     return
                 }
-
-                // Результат writeDescriptor в разных SDK — Boolean или Int.
-                // Не сравниваем с GATT_SUCCESS; статус придёт в onDescriptorWrite().
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     g.writeDescriptor(desc, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                 } else {
@@ -160,7 +202,51 @@ class GattMemoClient(private val context: Context) {
                 if (ch == null) {
                     fail("Характеристика 0xFFF4 исчезла"); return
                 }
-                sendReadCommand(g, ch, maxRecords)
+                doProbeAndRead(g, ch, maxRecords)
+            }
+
+            /**
+             * Проверка отклика: шлём 0x00 (DEVID), ждём notify [0x00, ...] с таймаутом 5 с.
+             * Если ответ пришёл — шлём 0x35 (чтение истории). Если нет — fail.
+             */
+            private fun doProbeAndRead(
+                g: BluetoothGatt,
+                ch: BluetoothGattCharacteristic,
+                maxRecords: Int
+            ) {
+                val probe = CompletableDeferred<Unit>()
+                probeDeferred = probe
+                trySend(Event.Probe)
+
+                val sent = writeBytes(g, ch, byteArrayOf(0x00))
+                if (!sent) {
+                    probeDeferred = null
+                    fail("Не удалось отправить 0x00 (DEVID)")
+                    return
+                }
+
+                // Ждём probe.await() в отдельной корутине (callbackFlow scope)
+                launch {
+                    val ok = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
+                        try {
+                            probe.await()
+                            true
+                        } catch (_: Exception) {
+                            false
+                        }
+                    } ?: false
+                    probeDeferred = null
+                    if (finished) return@launch
+                    if (!ok) {
+                        fail("Датчик не отвечает")
+                        return@launch
+                    }
+                    // Ответ пришёл — читаем историю
+                    Log.d(TAG, "probe ok, write 0x35")
+                    if (!writeBytes(g, ch, readCommandBytes(maxRecords))) {
+                        fail("Не удалось отправить 0x35 (LOGGER)")
+                    }
+                }
             }
 
             override fun onCharacteristicChanged(
@@ -169,7 +255,7 @@ class GattMemoClient(private val context: Context) {
                 value: ByteArray
             ) {
                 if (ch.uuid != CHAR_CMD) return
-                recordsRead = handlePacket(value, recordsRead)
+                handle(value)
             }
 
             @Deprecated("Deprecated in Java")
@@ -180,13 +266,29 @@ class GattMemoClient(private val context: Context) {
                 if (ch.uuid != CHAR_CMD) return
                 @Suppress("DEPRECATION")
                 val value = ch.value ?: return
-                recordsRead = handlePacket(value, recordsRead)
+                handle(value)
             }
 
-            private fun handlePacket(value: ByteArray, prev: Int): Int {
-                if (value.isEmpty()) return prev
-                if ((value[0].toInt() and 0xFF) != 0x35) return prev
+            private fun handle(value: ByteArray) {
+                if (value.isEmpty()) return
+                val id = value[0].toInt() and 0xFF
+                Log.d(TAG, "notify blkId=0x${"%02X".format(id)}: ${value.toHex()}")
 
+                // Ответ на probe (DEVID, 0x00)
+                if (id == 0x00) {
+                    val probe = probeDeferred
+                    if (probe != null && !probe.isCompleted) {
+                        probe.complete(Unit)
+                    }
+                    return
+                }
+
+                // История (0x35)
+                if (id != 0x35) return
+                recordsRead = handleHistory(value, recordsRead)
+            }
+
+            private fun handleHistory(value: ByteArray, prev: Int): Int {
                 return when {
                     value.size >= 13 -> {
                         val cnt = readUInt16LE(value, 1)
@@ -201,12 +303,11 @@ class GattMemoClient(private val context: Context) {
                         next
                     }
                     value.size == 3 -> {
-                        finish()
+                        finish()      // устройство закончило историю
                         prev
                     }
                     else -> {
-                        Log.d(TAG, "skip 0x35 len=${value.size}: " +
-                                value.joinToString(" ") { "%02X".format(it) })
+                        Log.d(TAG, "skip 0x35 len=${value.size}: ${value.toHex()}")
                         prev
                     }
                 }
@@ -222,7 +323,9 @@ class GattMemoClient(private val context: Context) {
             return@callbackFlow
         }
 
-        Log.d(TAG, "connectGatt ${device.address}")
+        if (finished) return@callbackFlow
+
+        Log.d(TAG, "connectGatt ${device.address} (autoConnect=false)")
         gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
         if (gatt == null) {
             fail("connectGatt вернул null")
@@ -237,35 +340,45 @@ class GattMemoClient(private val context: Context) {
         awaitClose {
             watchdog.cancel()
             closeGatt()
+            releaseMutex()
+            if (!finished) {
+                finished = true
+                activeCancel = null
+                probeDeferred = null
+            }
+            Log.d(TAG, "readHistory closed")
         }
     }
         .buffer(Channel.UNLIMITED)
 
     @SuppressLint("MissingPermission")
-    private fun sendReadCommand(
+    private fun writeBytes(
         g: BluetoothGatt,
         ch: BluetoothGattCharacteristic,
-        maxRecords: Int
-    ) {
+        bytes: ByteArray
+    ): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            g.writeCharacteristic(ch, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) ==
+                    android.bluetooth.BluetoothStatusCodes.SUCCESS
+        } else {
+            @Suppress("DEPRECATION")
+            ch.value = bytes
+            @Suppress("DEPRECATION")
+            ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            @Suppress("DEPRECATION")
+            g.writeCharacteristic(ch)
+        }
+    }
+
+    private fun readCommandBytes(maxRecords: Int): ByteArray {
         val cnt = maxRecords.coerceIn(0, 0xFFFF)
-        val cmd = byteArrayOf(
+        return byteArrayOf(
             0x35,
             (cnt and 0xFF).toByte(),
             ((cnt shr 8) and 0xFF).toByte(),
             0x00,
             0x00
         )
-        Log.d(TAG, "write 0x35 cnt=$cnt")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeCharacteristic(ch, cmd, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
-        } else {
-            @Suppress("DEPRECATION")
-            ch.value = cmd
-            @Suppress("DEPRECATION")
-            ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-            @Suppress("DEPRECATION")
-            g.writeCharacteristic(ch)
-        }
     }
 
     private fun readInt16LE(d: ByteArray, o: Int): Int =
@@ -278,4 +391,7 @@ class GattMemoClient(private val context: Context) {
                 ((d[o + 1].toLong() and 0xFF) shl 8) or
                 ((d[o + 2].toLong() and 0xFF) shl 16) or
                 ((d[o + 3].toLong() and 0xFF) shl 24)
+
+    private fun ByteArray.toHex(): String =
+        joinToString(" ") { "%02X".format(it) }
 }

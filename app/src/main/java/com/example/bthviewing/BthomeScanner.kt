@@ -69,7 +69,7 @@ class BthomeScanner(private val context: Context) {
     @SuppressLint("MissingPermission")
     fun scanFor(
         address: String,
-        scanMode: Int = ScanSettings.SCAN_MODE_LOW_POWER
+        scanMode: Int = ScanSettings.SCAN_MODE_LOW_LATENCY
     ): Flow<ScannedDevice> = scanInternal(address = address, scanMode = scanMode)
 
     /**

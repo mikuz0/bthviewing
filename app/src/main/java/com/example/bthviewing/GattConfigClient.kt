@@ -39,7 +39,7 @@ class GattConfigClient(private val context: Context) {
         private const val RETRY_DELAY_MS = 2000L
     }
 
-    private val lock = Mutex()
+    private val lock = BleMutex.mutex
 
     @SuppressLint("MissingPermission")
     suspend fun request(
@@ -252,7 +252,7 @@ class GattConfigClient(private val context: Context) {
         try { ensureActive() } catch (_: CancellationException) { finish(); return@callbackFlow }
 
         Log.d(TAG, "connectGatt ${device.address}")
-        gatt = device.connectGatt(context, true, callback, BluetoothDevice.TRANSPORT_LE)
+        gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
         if (gatt == null) {
             finish(IllegalStateException("connectGatt=null"))
             return@callbackFlow

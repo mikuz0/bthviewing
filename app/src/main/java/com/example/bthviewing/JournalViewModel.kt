@@ -21,6 +21,8 @@ data class JournalUiState(
     val deviceAddress: String? = null,
     val deviceName: String? = null,
     val isReading: Boolean = false,
+    val isCancelling: Boolean = false,
+    val phase: String? = null,
     val records: List<MemoRecord> = emptyList(),
     val error: String? = null,
     val done: Boolean = false,
@@ -41,6 +43,9 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
     private var job: Job? = null
 
     fun setTarget(address: String?, name: String?) {
+        if (_uiState.value.deviceAddress != address && _uiState.value.isReading) {
+            client.cancel()
+        }
         _uiState.value = _uiState.value.copy(
             deviceAddress = address,
             deviceName = name,
@@ -48,6 +53,8 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
             done = false,
             error = null,
             isReading = false,
+            isCancelling = false,
+            phase = null,
             exportMessage = null
         )
     }
@@ -70,6 +77,8 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
         job?.cancel()
         _uiState.value = _uiState.value.copy(
             isReading = true,
+            isCancelling = false,
+            phase = "Подключение…",
             records = emptyList(),
             done = false,
             error = null,
@@ -80,32 +89,56 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
             try {
                 client.readHistory(device, GattMemoClient.ALL_RECORDS).collect { ev ->
                     when (ev) {
+                        GattMemoClient.Event.Probe -> {
+                            _uiState.value = _uiState.value.copy(phase = "Проверка отклика…")
+                        }
                         is GattMemoClient.Event.Record -> {
-                            _uiState.value = _uiState.value.copy(
-                                records = _uiState.value.records + ev.record
+                            val cur = _uiState.value
+                            val newPhase = if (cur.phase == "Чтение истории…") cur.phase
+                            else "Чтение истории…"
+                            _uiState.value = cur.copy(
+                                phase = newPhase,
+                                records = cur.records + ev.record
                             )
                         }
                         is GattMemoClient.Event.Progress -> Unit
                         GattMemoClient.Event.Done -> {
                             _uiState.value = _uiState.value.copy(
                                 isReading = false,
+                                isCancelling = false,
+                                phase = "Готово",
                                 done = true
+                            )
+                        }
+                        GattMemoClient.Event.Cancelled -> {
+                            _uiState.value = _uiState.value.copy(
+                                isReading = false,
+                                isCancelling = false,
+                                phase = null
                             )
                         }
                         is GattMemoClient.Event.Error -> {
                             _uiState.value = _uiState.value.copy(
                                 isReading = false,
+                                isCancelling = false,
+                                phase = null,
                                 error = ev.message
                             )
                         }
                     }
                 }
             } catch (ce: CancellationException) {
-                _uiState.value = _uiState.value.copy(isReading = false)
+                _uiState.value = _uiState.value.copy(
+                    isReading = false,
+                    isCancelling = false,
+                    phase = null
+                )
                 throw ce
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isReading = false,
+                    isCancelling = false,
+                    phase = null,
                     error = e.message ?: "Ошибка чтения"
                 )
             }
@@ -113,12 +146,14 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun cancelRead() {
-        job?.cancel()
-        job = null
-        _uiState.value = _uiState.value.copy(isReading = false)
+        if (!_uiState.value.isReading) return
+        _uiState.value = _uiState.value.copy(
+            isCancelling = true,
+            phase = "Остановка…"
+        )
+        client.cancel()
     }
 
-    /** Экспорт уже прочитанных записей в CSV по выбранному через SAF uri. */
     fun exportCsv(uri: Uri) {
         val records = _uiState.value.records
         if (records.isEmpty()) {
@@ -156,6 +191,7 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onCleared() {
         super.onCleared()
+        client.cancel()
         job?.cancel()
     }
 }

@@ -150,7 +150,8 @@ fun AppRoot(
                         currentDeviceName = state.selectedName
                             ?: state.lastReading?.deviceName
                             ?: state.devices[state.selectedAddress]?.name,
-                        viewModel = journalViewModel
+                        viewModel = journalViewModel,
+                        mainViewModel = viewModel
                     )
                 }
                 composable("settings") {
@@ -158,7 +159,7 @@ fun AppRoot(
                     val state by viewModel.uiState.collectAsState()
                     SettingsScreen(
                         deviceAddress = state.selectedAddress,
-                        deviceServices = state.deviceServices,
+
                         mainViewModel = viewModel          // ← новый аргумент
                     )
                 }

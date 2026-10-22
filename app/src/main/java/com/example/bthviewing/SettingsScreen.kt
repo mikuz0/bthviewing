@@ -14,7 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -40,13 +40,21 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 fun SettingsScreen(
     deviceAddress: String?,
-    deviceServices: Long,
     viewModel: SettingsViewModel = viewModel(),
     appViewModel: AppViewModel = viewModel(),
     mainViewModel: MainViewModel = viewModel()
 ) {
     LaunchedEffect(deviceAddress) {
-        viewModel.setTarget(deviceAddress, deviceServices)
+        viewModel.setTarget(deviceAddress)
+    }
+
+    val s by viewModel.sensor.collectAsState()
+
+    // Когда GATT-операция завершилась (loading=false и saving=false) — возобновляем прослушивание.
+    LaunchedEffect(s.loading, s.saving) {
+        if (!s.loading && !s.saving) {
+            mainViewModel.startListening()
+        }
     }
 
     val tabs = listOf("Настроить датчик", "Настроить приложение")
@@ -59,8 +67,8 @@ fun SettingsScreen(
             }
         }
         when (tab) {
-            0 -> SensorTab(viewModel)
-            1 -> AppTab(appViewModel, mainViewModel)      // ← оба аргумента
+            0 -> SensorTab(viewModel, mainViewModel)
+            1 -> AppTab(appViewModel, mainViewModel)
         }
     }
 }
@@ -68,7 +76,10 @@ fun SettingsScreen(
 /* -------------------------- Настроить датчик ---------------------------- */
 
 @Composable
-private fun SensorTab(vm: SettingsViewModel) {
+private fun SensorTab(
+    vm: SettingsViewModel,
+    mainViewModel: MainViewModel
+) {
     val s by vm.sensor.collectAsState()
 
     Column(
@@ -110,9 +121,18 @@ private fun SensorTab(vm: SettingsViewModel) {
         ReadWriteDefault(
             loading = s.loading,
             saving = s.saving,
-            onRead = vm::readSensor,
-            onWrite = vm::writeSensor,
-            onDefault = vm::resetSensor
+            onRead = {
+                mainViewModel.stopListening()
+                vm.readSensor()
+            },
+            onWrite = {
+                mainViewModel.stopListening()
+                vm.writeSensor()
+            },
+            onDefault = {
+                mainViewModel.stopListening()
+                vm.resetSensor()
+            }
         )
         s.error?.let {
             Spacer(Modifier.height(8.dp))
@@ -158,7 +178,7 @@ private fun AppTab(
         }
 
         Spacer(Modifier.height(16.dp))
-        Divider()
+        HorizontalDivider()
         Spacer(Modifier.height(16.dp))
 
         Text("Экран", fontWeight = FontWeight.Bold)
@@ -180,7 +200,7 @@ private fun AppTab(
         }
 
         Spacer(Modifier.height(16.dp))
-        Divider()
+        HorizontalDivider()
         Spacer(Modifier.height(16.dp))
 
         Text("Данные", fontWeight = FontWeight.Bold)
@@ -201,7 +221,7 @@ private fun AppTab(
         )
 
         Spacer(Modifier.height(16.dp))
-        Divider()
+        HorizontalDivider()
         Spacer(Modifier.height(16.dp))
 
         Text(

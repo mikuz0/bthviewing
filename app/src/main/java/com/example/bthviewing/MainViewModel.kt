@@ -32,12 +32,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val TAG = "MainViewModel"
         private const val REFRESH_DURATION_SECONDS = 120
+        private const val STALE_THRESHOLD_MS = 5 * 60 * 1000L   // 5 минут
 
         private const val PREFS = "main_prefs"
         private const val KEY_SELECTED_ADDRESS = "selected_address"
         private const val KEY_SELECTED_NAME = "selected_name"
         private const val KEY_SHOW_ONLY_BTHOME = "show_only_bthome"
         private const val KEY_DEVICES = "devices_json"
+        private const val KEY_READINGS_CACHE = "readings_cache_json"
+
+        /** Максимум записей в кэше lastReading. При превышении — удаляем самую старую. */
+        private const val MAX_CACHE_ENTRIES = 50
+
+        fun isStale(reading: BthomeData): Boolean =
+            System.currentTimeMillis() - reading.timestamp > STALE_THRESHOLD_MS
     }
 
     private val prefs = application.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -48,8 +56,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             devices = loadDevices(),
             selectedAddress = prefs.getString(KEY_SELECTED_ADDRESS, null),
             selectedName = prefs.getString(KEY_SELECTED_NAME, null),
+            lastReading = null,
             showOnlyBthome = prefs.getBoolean(KEY_SHOW_ONLY_BTHOME, false)
-        )
+        ).let { s ->
+            // lastReading для восстановленного адреса
+            val cached = s.selectedAddress?.let { loadCachedReading(it) }
+            s.copy(
+                selectedName = s.selectedName ?: cached?.deviceName,
+                lastReading = cached
+            )
+        }
     )
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
@@ -135,11 +151,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ------------------------------------------------------ Прослушивание --
 
-    private fun startListening() {
+    fun stopListening() {
+        listenJob?.cancel()
+        listenJob = null
+        _uiState.value = _uiState.value.copy(isListening = false)
+    }
+
+    fun startListening() {
         val address = _uiState.value.selectedAddress ?: return
         if (listenJob?.isActive == true) return
         if (!scanner.isBluetoothReady()) return
         if (!scanner.hasPermissions()) return
+        if (_uiState.value.isRefreshingList) return
 
         _uiState.value = _uiState.value.copy(isListening = true)
 
@@ -148,6 +171,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 scanner.scanFor(address).collect { dev ->
                     if (dev.address == address && dev.bthomeData != null) {
                         _uiState.value = _uiState.value.copy(lastReading = dev.bthomeData)
+                        saveCachedReading(dev.bthomeData, dev.name ?: _uiState.value.selectedName)
                     }
                 }
             } catch (ce: CancellationException) {
@@ -162,28 +186,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun stopListening() {
-        listenJob?.cancel()
-        listenJob = null
-        _uiState.value = _uiState.value.copy(isListening = false)
-    }
-
     // ---------------------------------------------------------- Устройства -
 
     fun selectDevice(address: String) {
         val current = _uiState.value
         val name = current.devices[address]?.name
+
+        // Приоритет: свежие данные из скана (devices[address].bthomeData), иначе кэш из prefs.
         val reading = current.devices[address]?.bthomeData
+            ?: loadCachedReading(address)
 
         _uiState.value = current.copy(
             selectedAddress = address,
-            selectedName = name,
+            selectedName = name ?: reading?.deviceName,
             lastReading = reading
         )
 
         prefs.edit()
             .putString(KEY_SELECTED_ADDRESS, address)
-            .putString(KEY_SELECTED_NAME, name)
+            .putString(KEY_SELECTED_NAME, name ?: reading?.deviceName)
             .apply()
 
         stopListening()
@@ -192,6 +213,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearSelectedDevice() {
         stopListening()
+        // Кэш для адреса НЕ стираем — если пользователь вернётся, данные будут.
         _uiState.value = _uiState.value.copy(
             selectedAddress = null,
             selectedName = null,
@@ -206,11 +228,81 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearDeviceList() {
         _uiState.value = _uiState.value.copy(devices = emptyMap())
         prefs.edit().remove(KEY_DEVICES).apply()
+        // Кэш lastReading не трогаем — данные для адресов могут понадобиться.
     }
 
     fun setShowOnlyBthome(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(showOnlyBthome = enabled)
         prefs.edit().putBoolean(KEY_SHOW_ONLY_BTHOME, enabled).apply()
+    }
+
+    // ------------------------------------------- Кэш lastReading по адресу -
+
+    private fun loadCacheMap(): JSONObject {
+        val s = prefs.getString(KEY_READINGS_CACHE, null) ?: return JSONObject()
+        return try { JSONObject(s) } catch (_: Exception) { JSONObject() }
+    }
+
+    private fun saveCacheMap(obj: JSONObject) {
+        prefs.edit().putString(KEY_READINGS_CACHE, obj.toString()).apply()
+    }
+
+    private fun loadCachedReading(address: String): BthomeData? {
+        val map = loadCacheMap()
+        val o = map.optJSONObject(address) ?: return null
+        val ts = o.optLong("ts", 0L)
+        if (ts <= 0L) return null
+        val temp = o.optDouble("temp", Double.NaN).toFloat()
+        val humi = o.optDouble("humi", Double.NaN).toFloat()
+        val bat = o.optInt("bat", -1)
+        val volt = o.optDouble("volt", Double.NaN).toFloat()
+        val rssi = o.optInt("rssi", 0)
+        val name = o.optString("name", "").takeIf { it.isNotEmpty() }
+        return BthomeData(
+            deviceAddress = address,
+            deviceName = name,
+            temperature = temp.takeUnless { it.isNaN() },
+            humidity = humi.takeUnless { it.isNaN() },
+            battery = bat.takeIf { it >= 0 },
+            voltage = volt.takeUnless { it.isNaN() },
+            rssi = rssi,
+            timestamp = ts
+        )
+    }
+
+    private fun saveCachedReading(reading: BthomeData, name: String?) {
+        try {
+            val map = loadCacheMap()
+            val o = JSONObject()
+            o.put("name", name ?: reading.deviceName ?: "")
+            o.put("ts", reading.timestamp)
+            o.put("temp", reading.temperature ?: Double.NaN)
+            o.put("humi", reading.humidity ?: Double.NaN)
+            o.put("bat", reading.battery ?: -1)
+            o.put("volt", reading.voltage ?: Double.NaN)
+            o.put("rssi", reading.rssi)
+            map.put(reading.deviceAddress, o)
+
+            // Ограничиваем размер кэша: удаляем самую старую запись
+            if (map.length() > MAX_CACHE_ENTRIES) {
+                var oldestKey: String? = null
+                var oldestTs = Long.MAX_VALUE
+                val it = map.keys()
+                while (it.hasNext()) {
+                    val k = it.next()
+                    val ts = map.optJSONObject(k)?.optLong("ts", 0L) ?: 0L
+                    if (ts < oldestTs) {
+                        oldestTs = ts
+                        oldestKey = k
+                    }
+                }
+                oldestKey?.let { map.remove(it) }
+            }
+
+            saveCacheMap(map)
+        } catch (e: Exception) {
+            Log.w(TAG, "saveCachedReading", e)
+        }
     }
 
     // ------------------------------------------------- Хранение списка prefs -
