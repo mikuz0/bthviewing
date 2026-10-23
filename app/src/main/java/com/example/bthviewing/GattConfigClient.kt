@@ -19,9 +19,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 class GattConfigClient(private val context: Context) {
@@ -33,38 +32,44 @@ class GattConfigClient(private val context: Context) {
         val CHAR_CMD: UUID = UUID.fromString("0000fff4-0000-1000-8000-00805f9b34fb")
         val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-        private const val PRE_CONNECT_DELAY_MS = 1500L
+        private const val PRE_CONNECT_DELAY_MS = 500L
         private const val DEFAULT_TIMEOUT_MS = 30_000L
-        private const val MAX_ATTEMPTS = 3
-        private const val RETRY_DELAY_MS = 2000L
+        private const val PROBE_TIMEOUT_MS = 5_000L
     }
 
-    private val lock = BleMutex.mutex
+    /** Колбэк для уведомления UI о текущей фазе. */
+    fun interface PhaseCallback {
+        fun onPhase(phase: String)
+    }
 
+    /**
+     * Отправить команду и вернуть ответ (весь пакет, начиная с blkId).
+     * Одна попытка, таймаут [DEFAULT_TIMEOUT_MS]. Перед командой — probe 0x00 (DEVID)
+     * с таймаутом 5 с, как в GattMemoClient.
+     * Бросает [IllegalStateException] при таймауте/ошибке GATT.
+     *
+     * @param onPhase вызывается для каждой фазы: «Подключение…», «Проверка отклика…»,
+     *                «Чтение…»/«Запись…»/«Сброс…», «Готово».
+     */
     @SuppressLint("MissingPermission")
     suspend fun request(
         device: BluetoothDevice,
         cmd: ByteArray,
-        timeoutMs: Long = DEFAULT_TIMEOUT_MS
-    ): ByteArray = lock.withLock {
+        timeoutMs: Long = DEFAULT_TIMEOUT_MS,
+        onPhase: PhaseCallback? = null
+    ): ByteArray {
         if (cmd.isEmpty()) throw IllegalArgumentException("Пустая команда")
         val blkId = cmd[0].toInt() and 0xFF
         Log.d(TAG, "request blkId=0x${"%02X".format(blkId)} cmd=${cmd.toHex()}")
 
-        var lastError: Exception? = null
-        for (attempt in 1..MAX_ATTEMPTS) {
-            try {
-                return singleAttempt(device, cmd, blkId, timeoutMs)
-            } catch (e: Exception) {
-                lastError = e
-                Log.w(TAG, "attempt $attempt/$MAX_ATTEMPTS failed: ${e.message}")
-                if (attempt < MAX_ATTEMPTS) delay(RETRY_DELAY_MS)
-            }
+        val commandPhase = when (blkId) {
+            0x23 -> "Чтение…"
+            0x25, 0x26 -> "Запись…"
+            0x55, 0x56 -> "Запись…"
+            else -> "Команда…"
         }
-        throw IllegalStateException(
-            lastError?.message ?: "Не удалось получить ответ от устройства",
-            lastError
-        )
+
+        return singleAttempt(device, cmd, blkId, timeoutMs, commandPhase, onPhase)
     }
 
     @SuppressLint("MissingPermission")
@@ -72,12 +77,16 @@ class GattConfigClient(private val context: Context) {
         device: BluetoothDevice,
         cmd: ByteArray,
         blkId: Int,
-        timeoutMs: Long
+        timeoutMs: Long,
+        commandPhase: String,
+        onPhase: PhaseCallback?
     ): ByteArray {
+        onPhase?.onPhase("Подключение…")
         delay(PRE_CONNECT_DELAY_MS)
 
         val replyDeferred = CompletableDeferred<ByteArray>()
-        val flow = connectAndSubscribe(device, cmd, blkId, replyDeferred)
+        val probeDeferred = CompletableDeferred<Unit>()
+        val flow = connectAndSubscribe(device, cmd, blkId, replyDeferred, probeDeferred, commandPhase, onPhase)
 
         val reply: ByteArray
         try {
@@ -87,6 +96,7 @@ class GattConfigClient(private val context: Context) {
                     catch (_: CancellationException) { /* normal */ }
                     catch (e: Exception) {
                         if (!replyDeferred.isCompleted) replyDeferred.completeExceptionally(e)
+                        if (!probeDeferred.isCompleted) probeDeferred.completeExceptionally(e)
                     }
                 }
                 try {
@@ -98,6 +108,7 @@ class GattConfigClient(private val context: Context) {
         } catch (te: kotlinx.coroutines.TimeoutCancellationException) {
             throw IllegalStateException("Устройство не ответило за $timeoutMs мс", te)
         }
+        onPhase?.onPhase("Готово")
         return reply
     }
 
@@ -106,8 +117,14 @@ class GattConfigClient(private val context: Context) {
         device: BluetoothDevice,
         cmd: ByteArray,
         expectedBlkId: Int,
-        replyDeferred: CompletableDeferred<ByteArray>
+        replyDeferred: CompletableDeferred<ByteArray>,
+        probeDeferred: CompletableDeferred<Unit>,
+        commandPhase: String,
+        onPhase: PhaseCallback?
     ): Flow<Unit> = callbackFlow {
+        BleMutex.mutex.lock()
+        Log.d(TAG, "start request ${device.address}, blkId=0x${"%02X".format(expectedBlkId)}")
+
         var gatt: BluetoothGatt? = null
         var finished = false
         var cmdSent = false
@@ -119,14 +136,48 @@ class GattConfigClient(private val context: Context) {
             try { g.close() } catch (_: Exception) {}
         }
 
+        fun releaseMutex() {
+            try {
+                BleMutex.mutex.unlock()
+            } catch (_: Exception) {
+                // уже разблокирован
+            }
+        }
+
         fun finish(error: Throwable? = null) {
             if (finished) return
             finished = true
             closeGatt()
-            if (error != null && !replyDeferred.isCompleted) {
-                replyDeferred.completeExceptionally(error)
+            releaseMutex()
+            if (!replyDeferred.isCompleted) {
+                replyDeferred.completeExceptionally(
+                    error ?: CancellationException("closed")
+                )
+            }
+            if (!probeDeferred.isCompleted) {
+                probeDeferred.completeExceptionally(
+                    error ?: CancellationException("closed")
+                )
             }
             close()
+        }
+
+        fun sendProbe(g: BluetoothGatt, ch: BluetoothGattCharacteristic) {
+            Log.d(TAG, "write probe 0x00 (DEVID)")
+            val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                g.writeCharacteristic(ch, byteArrayOf(0x00), BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) ==
+                        android.bluetooth.BluetoothStatusCodes.SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                ch.value = byteArrayOf(0x00)
+                @Suppress("DEPRECATION")
+                ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                @Suppress("DEPRECATION")
+                g.writeCharacteristic(ch)
+            }
+            if (!ok) {
+                finish(IllegalStateException("write probe failed"))
+            }
         }
 
         fun sendCmd(g: BluetoothGatt, ch: BluetoothGattCharacteristic) {
@@ -156,13 +207,18 @@ class GattConfigClient(private val context: Context) {
                 Log.d(TAG, "onConnectionStateChange status=$status newState=$newState")
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     finish(IllegalStateException(
-                        if (status == 133) "BLE 133: датчик занят другим устройством"
+                        if (status == 133) "BLE 133: датчик занят другим устройством, мешает Wi-Fi (2.4 ГГц) или другие беспроводные интерфейсы. Убедитесь, что выбранный датчик активен, отключите Wi-Fi и повторите."
                         else "GATT status=$status"
                     ))
                     return
                 }
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
+                        try {
+                            g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "requestConnectionPriority", e)
+                        }
                         if (!g.discoverServices()) {
                             finish(IllegalStateException("discoverServices() вернул false"))
                         }
@@ -185,7 +241,7 @@ class GattConfigClient(private val context: Context) {
                 }
                 val desc = ch.getDescriptor(CCCD)
                 if (desc == null) {
-                    sendCmd(g, ch)
+                    doProbeAndCommand(g, ch)
                     return
                 }
                 val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -210,7 +266,38 @@ class GattConfigClient(private val context: Context) {
                 }
                 val ch = g.getService(SERVICE_FCD2)?.getCharacteristic(CHAR_CMD)
                 if (ch == null) { finish(IllegalStateException("0xFFF4 пропала")); return }
-                sendCmd(g, ch)
+                doProbeAndCommand(g, ch)
+            }
+
+            /**
+             * Шлём probe 0x00 (DEVID), ждём notify [0x00, ...] с таймаутом 5 с.
+             * Если ответ пришёл — шлём настоящую команду. Если нет — fail.
+             */
+            private fun doProbeAndCommand(
+                g: BluetoothGatt,
+                ch: BluetoothGattCharacteristic
+            ) {
+                onPhase?.onPhase("Проверка отклика…")
+                sendProbe(g, ch)
+                launch {
+                    val ok = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
+                        try {
+                            probeDeferred.await()
+                            true
+                        } catch (_: Exception) {
+                            false
+                        }
+                    } ?: false
+                    if (finished) return@launch
+                    if (!ok) {
+                        Log.w(TAG, "probe timeout ($PROBE_TIMEOUT_MS ms)")
+                        finish(IllegalStateException("Датчик не отвечает"))
+                        return@launch
+                    }
+                    Log.d(TAG, "probe ok, send command")
+                    onPhase?.onPhase(commandPhase)
+                    sendCmd(g, ch)
+                }
             }
 
             override fun onCharacteristicChanged(
@@ -237,6 +324,14 @@ class GattConfigClient(private val context: Context) {
                 if (value.isEmpty()) return
                 val id = value[0].toInt() and 0xFF
                 Log.d(TAG, "notify blkId=0x${"%02X".format(id)}: ${value.toHex()}")
+
+                // Ответ на probe (DEVID, 0x00)
+                if (id == 0x00) {
+                    if (!probeDeferred.isCompleted) probeDeferred.complete(Unit)
+                    return
+                }
+
+                // Ответ на настоящую команду
                 if (id == expectedBlkId) {
                     if (!replyDeferred.isCompleted) {
                         replyDeferred.complete(value)
@@ -251,8 +346,8 @@ class GattConfigClient(private val context: Context) {
 
         try { ensureActive() } catch (_: CancellationException) { finish(); return@callbackFlow }
 
-        Log.d(TAG, "connectGatt ${device.address}")
-        gatt = device.connectGatt(context, true, callback, BluetoothDevice.TRANSPORT_LE)
+        Log.d(TAG, "connectGatt ${device.address} (autoConnect=false)")
+        gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
         if (gatt == null) {
             finish(IllegalStateException("connectGatt=null"))
             return@callbackFlow
@@ -260,9 +355,17 @@ class GattConfigClient(private val context: Context) {
 
         awaitClose {
             closeGatt()
+            releaseMutex()
+            if (!finished) {
+                finished = true
+            }
             if (!replyDeferred.isCompleted) {
                 replyDeferred.completeExceptionally(CancellationException("closed"))
             }
+            if (!probeDeferred.isCompleted) {
+                probeDeferred.completeExceptionally(CancellationException("closed"))
+            }
+            Log.d(TAG, "request closed")
         }
     }
 

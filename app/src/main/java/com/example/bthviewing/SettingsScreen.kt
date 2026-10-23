@@ -1,5 +1,6 @@
 package com.example.bthviewing
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,10 +12,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -32,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -87,7 +93,13 @@ private fun SensorTab(
     deviceName: String?
 ) {
     val s by vm.sensor.collectAsState()
+    val context = LocalContext.current
     val timeFmt = remember { SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()) }
+
+    // Свёрнутость коэффициентов — сбрасывается при смене устройства через LaunchedEffect
+    var coefficientsExpanded by remember(deviceAddress) { mutableStateOf(false) }
+    var showWarningDialog by remember(deviceAddress) { mutableStateOf(false) }
+    var warningShownThisSession by remember(deviceAddress) { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -108,58 +120,169 @@ private fun SensorTab(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Spacer(Modifier.height(12.dp))
 
-        // ------------------ Коэффициенты ------------------
-        if (s.mid == 0 && s.vid == 0 && !s.loaded) {
+        // ------------------ Предупреждение о Wi-Fi ------------------
+        if (deviceAddress != null) {
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
+            val wifiText = remember { WifiStatus.text(context) }
             Text(
-                "Нажмите «Прочитать», чтобы получить коэффициенты калибровки",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 13.sp
+                text = wifiText,
+                fontSize = 12.sp,
+                color = if (wifiText.contains("включён"))
+                    MaterialTheme.colorScheme.error
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.height(12.dp))
-        } else {
             Text(
-                "ID: %04X-%04X, I2C: 0x%02X".format(s.mid, s.vid, s.i2cAddr),
-                fontSize = 13.sp,
+                text = "Отключите Wi-Fi (2.4 ГГц мешает BLE).",
+                fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.height(12.dp))
-        }
-
-        NumField("temp_k (uint32, ×0.01)", s.tempK.toString()) {
-            it.toLongOrNull()?.let { v -> vm.updateSensor(tempK = v) }
-        }
-        NumField("humi_k (uint32, ×0.01)", s.humiK.toString()) {
-            it.toLongOrNull()?.let { v -> vm.updateSensor(humiK = v) }
-        }
-        NumField("temp_z (sint16, ×0.01 °C)", s.tempZ.toString()) {
-            it.toIntOrNull()?.let { v -> vm.updateSensor(tempZ = v) }
-        }
-        NumField("humi_z (sint16, ×0.01 %)", s.humiZ.toString()) {
-            it.toIntOrNull()?.let { v -> vm.updateSensor(humiZ = v) }
         }
 
         Spacer(Modifier.height(16.dp))
-        ReadWriteDefault(
-            loading = s.loading,
-            saving = s.saving,
-            onRead = {
-                mainViewModel.stopListening()
-                vm.readSensor()
-            },
-            onWrite = {
-                mainViewModel.stopListening()
-                vm.writeSensor()
-            },
-            onDefault = {
-                mainViewModel.stopListening()
-                vm.resetSensor()
+
+        // ------------------ Коэффициенты: свёрнуто/развёрнуто ------------------
+        if (!coefficientsExpanded) {
+            // Свёрнутое состояние
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        if (warningShownThisSession) {
+                            coefficientsExpanded = true
+                        } else {
+                            showWarningDialog = true
+                        }
+                    }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Коэффициенты калибровки",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Развернуть"
+                )
             }
-        )
-        s.error?.let {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Изменение коэффициентов может привести к неверным показаниям " +
+                        "датчика. Если не уверены — не трогайте.",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(8.dp))
-            Text("Ошибка: $it", color = MaterialTheme.colorScheme.error)
+            OutlinedButton(
+                onClick = {
+                    if (warningShownThisSession) {
+                        coefficientsExpanded = true
+                    } else {
+                        showWarningDialog = true
+                    }
+                }
+            ) {
+                Text("Показать коэффициенты")
+            }
+        } else {
+            // Развёрнутое состояние
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { coefficientsExpanded = false }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Коэффициенты калибровки",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowUp,
+                    contentDescription = "Свернуть"
+                )
+            }
+            Text(
+                "⚠️ Изменение коэффициентов может привести к неверным показаниям датчика.",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.error
+            )
+            Spacer(Modifier.height(8.dp))
+
+            if (s.mid == 0 && s.vid == 0 && !s.loaded) {
+                Text(
+                    "Нажмите «Прочитать», чтобы получить текущие коэффициенты",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                Spacer(Modifier.height(12.dp))
+            } else {
+                Text(
+                    "ID: %04X-%04X, I2C: 0x%02X".format(s.mid, s.vid, s.i2cAddr),
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
+            NumField("temp_k (uint32, ×0.01)", s.tempK.toString()) {
+                it.toLongOrNull()?.let { v -> vm.updateSensor(tempK = v) }
+            }
+            NumField("humi_k (uint32, ×0.01)", s.humiK.toString()) {
+                it.toLongOrNull()?.let { v -> vm.updateSensor(humiK = v) }
+            }
+            NumField("temp_z (sint16, ×0.01 °C)", s.tempZ.toString()) {
+                it.toIntOrNull()?.let { v -> vm.updateSensor(tempZ = v) }
+            }
+            NumField("humi_z (sint16, ×0.01 %)", s.humiZ.toString()) {
+                it.toIntOrNull()?.let { v -> vm.updateSensor(humiZ = v) }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            ReadWriteDefault(
+                loading = s.loading,
+                saving = s.saving,
+                onRead = {
+                    mainViewModel.stopListening()
+                    vm.readSensor()
+                },
+                onWrite = {
+                    mainViewModel.stopListening()
+                    vm.writeSensor()
+                },
+                onDefault = {
+                    mainViewModel.stopListening()
+                    vm.resetSensor()
+                }
+            )
+
+            // Сообщение под кнопками коэффициентов
+            if (s.loading || s.saving || (s.phase != null && s.phase != "Готово")) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (s.loading || s.saving) {
+                        CircularProgressIndicator(Modifier.height(18.dp).width(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = s.phase ?: if (s.loading) "Чтение…" else "Запись…",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            s.error?.let {
+                Spacer(Modifier.height(8.dp))
+                Text("Ошибка: $it", color = MaterialTheme.colorScheme.error)
+            }
         }
 
         // ------------------ Время датчика ------------------
@@ -217,12 +340,28 @@ private fun SensorTab(
             }
         }
 
+        // Сообщение под кнопками времени
+        if (s.timeReading || s.timeSetting || (s.phase != null && s.phase != "Готово")) {
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (s.timeReading || s.timeSetting) {
+                    CircularProgressIndicator(Modifier.height(18.dp).width(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(
+                    text = s.phase ?: if (s.timeReading) "Чтение…" else "Установка…",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
+        // Показ прочитанного / установленного времени
         if (s.timeReadOk) {
             Spacer(Modifier.height(8.dp))
             val curSec = s.timeCur
             val isValid = curSec > 1_000_000_000L
 
-            // Смещение текущей таймзоны телефона (то же, что setDeviceTime вычитает)
             val offsetMs = TimeZone.getDefault().getOffset(System.currentTimeMillis())
             val offsetSign = if (offsetMs >= 0) "+" else "-"
             val absOffsetMs = kotlin.math.abs(offsetMs)
@@ -285,6 +424,36 @@ private fun SensorTab(
                 color = MaterialTheme.colorScheme.error
             )
         }
+    }
+
+    // ------------------ Диалог предупреждения ------------------
+    if (showWarningDialog) {
+        AlertDialog(
+            onDismissRequest = { showWarningDialog = false },
+            title = { Text("Внимание") },
+            text = {
+                Text(
+                    "Изменение коэффициентов калибровки может привести к неверным " +
+                            "показаниям датчика. Восстановить правильные значения можно " +
+                            "кнопкой «Default», но история с ошибкой уже будет записана.\n\n" +
+                            "Считайте и запишите действующие коэффициенты."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    warningShownThisSession = true
+                    coefficientsExpanded = true
+                    showWarningDialog = false
+                }) {
+                    Text("Я понимаю, открыть")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWarningDialog = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 }
 

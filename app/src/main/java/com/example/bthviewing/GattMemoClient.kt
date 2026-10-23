@@ -130,7 +130,7 @@ class GattMemoClient(private val context: Context) {
                 Log.d(TAG, "onConnectionStateChange status=$status newState=$newState")
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     if (status == 133) {
-                        fail("Ошибка BLE 133. Убедитесь, что датчик не подключён к другому телефону/ПК, и повторите через 3-5 секунд.")
+                        fail("BLE 133: датчик занят другим устройством, мешает Wi-Fi (2.4 ГГц) или другие беспроводные интерфейсы. Убедитесь, что выбранный датчик активен, отключите Wi-Fi и повторите.")
                     } else {
                         fail("GATT status=$status")
                     }

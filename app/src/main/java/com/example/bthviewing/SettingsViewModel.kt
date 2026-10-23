@@ -19,6 +19,7 @@ data class SensorState(
     val loading: Boolean = false,
     val saving: Boolean = false,
     val error: String? = null,
+    val phase: String? = null,
     val tempK: Long = 0,
     val humiK: Long = 0,
     val tempZ: Int = 0,
@@ -27,11 +28,10 @@ data class SensorState(
     val vid: Int = 0,
     val i2cAddr: Int = 0,
 
-    // Время (CMD_ID_UTC_TIME, 0x23)
     val timeReading: Boolean = false,
     val timeSetting: Boolean = false,
-    val timeCur: Long = 0,          // прочитанное с устройства (сек)
-    val timeCurSet: Long = 0,       // когда было установлено (сек, если пришло 8 байт)
+    val timeCur: Long = 0,
+    val timeCurSet: Long = 0,
     val timeReadOk: Boolean = false,
     val timeReadError: String? = null,
     val timeSetOk: Boolean = false,
@@ -51,6 +51,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val _sensor = MutableStateFlow(SensorState())
     val sensor: StateFlow<SensorState> = _sensor.asStateFlow()
+
+    private fun phaseCallback() = GattConfigClient.PhaseCallback { phase ->
+        _sensor.value = _sensor.value.copy(phase = phase)
+    }
 
     fun setTarget(address: String?) {
         if (lastDeviceAddress != address) {
@@ -77,16 +81,24 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _sensor.value = _sensor.value.copy(
             loading = true,
             error = null,
+            phase = null,
             timeReadOk = false, timeReadError = null,
             timeSetOk = false, timeSetError = null
         )
         viewModelScope.launch {
             try {
-                val reply = client.request((d as BluetoothDeviceOrError.Ok).device, byteArrayOf(0x25))
+                val reply = client.request(
+                    (d as BluetoothDeviceOrError.Ok).device,
+                    byteArrayOf(0x25),
+                    onPhase = phaseCallback()
+                )
                 _sensor.value = parseSensor(reply)
             } catch (e: Exception) {
                 Log.w(TAG, "readSensor", e)
-                _sensor.value = _sensor.value.copy(loading = false, error = e.message ?: "Ошибка чтения")
+                _sensor.value = _sensor.value.copy(
+                    loading = false, phase = null,
+                    error = e.message ?: "Ошибка чтения"
+                )
             }
         }
     }
@@ -98,6 +110,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _sensor.value = _sensor.value.copy(
             saving = true,
             error = null,
+            phase = null,
             timeReadOk = false, timeReadError = null,
             timeSetOk = false, timeSetError = null
         )
@@ -119,11 +132,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     (s.humiZ and 0xFF).toByte(),
                     ((s.humiZ shr 8) and 0xFF).toByte()
                 )
-                val reply = client.request((d as BluetoothDeviceOrError.Ok).device, cmd)
+                val reply = client.request(
+                    (d as BluetoothDeviceOrError.Ok).device, cmd,
+                    onPhase = phaseCallback()
+                )
                 _sensor.value = parseSensor(reply)
             } catch (e: Exception) {
                 Log.w(TAG, "writeSensor", e)
-                _sensor.value = _sensor.value.copy(saving = false, error = e.message ?: "Ошибка записи")
+                _sensor.value = _sensor.value.copy(
+                    saving = false, phase = null,
+                    error = e.message ?: "Ошибка записи"
+                )
             }
         }
     }
@@ -133,15 +152,23 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _sensor.value = _sensor.value.copy(
             saving = true,
             error = null,
+            phase = null,
             timeReadOk = false, timeReadError = null,
             timeSetOk = false, timeSetError = null
         )
         viewModelScope.launch {
             try {
-                val reply = client.request((d as BluetoothDeviceOrError.Ok).device, byteArrayOf(0x26))
+                val reply = client.request(
+                    (d as BluetoothDeviceOrError.Ok).device,
+                    byteArrayOf(0x26),
+                    onPhase = phaseCallback()
+                )
                 _sensor.value = parseSensor(reply)
             } catch (e: Exception) {
-                _sensor.value = _sensor.value.copy(saving = false, error = e.message ?: "Ошибка")
+                _sensor.value = _sensor.value.copy(
+                    saving = false, phase = null,
+                    error = e.message ?: "Ошибка"
+                )
             }
         }
     }
@@ -163,7 +190,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     // ---- CMD_ID_UTC_TIME (0x23) ---------------------------------------------
 
-    /** Прочитать текущее время с устройства. */
     fun readDeviceTime() {
         val d = deviceOrError(); if (d is BluetoothDeviceOrError.Error) {
             _sensor.value = _sensor.value.copy(timeReadError = d.message, timeReadOk = false)
@@ -174,16 +200,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             timeReadOk = false,
             timeReadError = null,
             timeSetOk = false,
-            timeSetError = null
+            timeSetError = null,
+            phase = null
         )
         viewModelScope.launch {
             try {
-                val reply = client.request((d as BluetoothDeviceOrError.Ok).device, byteArrayOf(0x23))
+                val reply = client.request(
+                    (d as BluetoothDeviceOrError.Ok).device,
+                    byteArrayOf(0x23),
+                    onPhase = phaseCallback()
+                )
                 if (reply.size >= 5 && (reply[0].toInt() and 0xFF) == 0x23) {
                     val cur = readU32(reply, 1)
                     val set = if (reply.size >= 9) readU32(reply, 5) else 0L
                     _sensor.value = _sensor.value.copy(
                         timeReading = false,
+                        phase = "Готово",
                         timeReadOk = true,
                         timeReadError = null,
                         timeCur = cur,
@@ -193,6 +225,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 } else {
                     _sensor.value = _sensor.value.copy(
                         timeReading = false,
+                        phase = null,
                         timeReadOk = false,
                         timeReadError = "Неверный ответ устройства"
                     )
@@ -201,6 +234,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 Log.w(TAG, "readDeviceTime", e)
                 _sensor.value = _sensor.value.copy(
                     timeReading = false,
+                    phase = null,
                     timeReadOk = false,
                     timeReadError = e.message ?: "Ошибка чтения времени"
                 )
@@ -208,14 +242,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    /** Установить текущее локальное время на устройстве. */
     fun setDeviceTime() {
         val d = deviceOrError(); if (d is BluetoothDeviceOrError.Error) {
             _sensor.value = _sensor.value.copy(timeSetError = d.message, timeSetOk = false)
             return
         }
 
-        // Локальное Unix-время (с поправкой на часовой пояс), как в PHY62x2BTHome.html
         val localSec = (System.currentTimeMillis() / 1000L) -
                 (java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 1000L)
 
@@ -224,7 +256,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             timeSetOk = false,
             timeSetError = null,
             timeReadOk = false,
-            timeReadError = null
+            timeReadError = null,
+            phase = null
         )
 
         viewModelScope.launch {
@@ -236,12 +269,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     ((localSec shr 16) and 0xFF).toByte(),
                     ((localSec shr 24) and 0xFF).toByte()
                 )
-                val reply = client.request((d as BluetoothDeviceOrError.Ok).device, cmd)
+                val reply = client.request(
+                    (d as BluetoothDeviceOrError.Ok).device, cmd,
+                    onPhase = phaseCallback()
+                )
                 if (reply.size >= 5 && (reply[0].toInt() and 0xFF) == 0x23) {
                     val cur = readU32(reply, 1)
                     val set = if (reply.size >= 9) readU32(reply, 5) else 0L
                     _sensor.value = _sensor.value.copy(
                         timeSetting = false,
+                        phase = "Готово",
                         timeSetOk = true,
                         timeSetError = null,
                         timeCur = cur,
@@ -253,6 +290,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 } else {
                     _sensor.value = _sensor.value.copy(
                         timeSetting = false,
+                        phase = null,
                         timeSetOk = false,
                         timeSetError = "Неверный ответ устройства"
                     )
@@ -261,6 +299,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 Log.w(TAG, "setDeviceTime", e)
                 _sensor.value = _sensor.value.copy(
                     timeSetting = false,
+                    phase = null,
                     timeSetOk = false,
                     timeSetError = e.message ?: "Ошибка установки времени"
                 )
@@ -272,7 +311,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private fun parseSensor(reply: ByteArray): SensorState {
         if (reply.size < 13) {
-            return _sensor.value.copy(loading = false, saving = false, error = "Короткий ответ")
+            return _sensor.value.copy(loading = false, saving = false, phase = null, error = "Короткий ответ")
         }
         val tempK = readU32(reply, 1)
         val humiK = readU32(reply, 5)
@@ -285,7 +324,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             addr = reply[17].toInt() and 0xFF
         }
         return SensorState(
-            loaded = true, loading = false, saving = false, error = null,
+            loaded = true, loading = false, saving = false, phase = "Готово", error = null,
             tempK = tempK, humiK = humiK, tempZ = tempZ, humiZ = humiZ,
             mid = mid, vid = vid, i2cAddr = addr
         )
@@ -301,7 +340,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         ((d[o].toInt() and 0xFF) or ((d[o + 1].toInt() and 0xFF) shl 8)).toShort().toInt()
 }
 
-/** Мелочь для возврата результата deviceOrError(). */
 sealed class BluetoothDeviceOrError {
     data class Ok(val device: BluetoothDevice) : BluetoothDeviceOrError()
     data class Error(val message: String) : BluetoothDeviceOrError()

@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +52,8 @@ fun JournalScreen(
     mainViewModel: MainViewModel
 ) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val deviceAddress = state.deviceAddress          // ← снимок для smart cast
 
     LaunchedEffect(currentDeviceAddress, currentDeviceName) {
         viewModel.setTarget(currentDeviceAddress, currentDeviceName)
@@ -80,13 +83,45 @@ fun JournalScreen(
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
+        // ---------- Шапка: имя + адрес датчика ----------
         Text(
-            text = state.deviceName ?: state.deviceAddress ?: "Устройство не выбрано",
+            text = state.deviceName ?: deviceAddress ?: "Устройство не выбрано",
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp
         )
+        if (deviceAddress != null) {
+            Text(
+                deviceAddress,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // ---------- Предупреждение о Wi-Fi ----------
+        if (deviceAddress != null) {
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
+            val wifiText = remember { WifiStatus.text(context) }
+            Text(
+                text = wifiText,
+                fontSize = 12.sp,
+                color = if (wifiText.contains("включён"))
+                    MaterialTheme.colorScheme.error
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Отключите Wi-Fi (2.4 ГГц мешает BLE).",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+
         Spacer(Modifier.height(8.dp))
 
+        // ---------- Кнопки действий ----------
         Row(verticalAlignment = Alignment.CenterVertically) {
             Button(
                 onClick = {
