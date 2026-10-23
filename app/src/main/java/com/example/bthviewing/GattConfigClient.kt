@@ -252,7 +252,7 @@ class GattConfigClient(private val context: Context) {
         try { ensureActive() } catch (_: CancellationException) { finish(); return@callbackFlow }
 
         Log.d(TAG, "connectGatt ${device.address}")
-        gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
+        gatt = device.connectGatt(context, true, callback, BluetoothDevice.TRANSPORT_LE)
         if (gatt == null) {
             finish(IllegalStateException("connectGatt=null"))
             return@callbackFlow

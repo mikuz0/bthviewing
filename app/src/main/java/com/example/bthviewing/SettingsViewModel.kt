@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Коэффициенты сенсора (CMD_ID_CFS, 0x25/0x26). */
+/** Коэффициенты сенсора (CMD_ID_CFS, 0x25/0x26) + состояние времени (0x23). */
 data class SensorState(
     val loaded: Boolean = false,
     val loading: Boolean = false,
@@ -25,7 +25,17 @@ data class SensorState(
     val humiZ: Int = 0,
     val mid: Int = 0,
     val vid: Int = 0,
-    val i2cAddr: Int = 0
+    val i2cAddr: Int = 0,
+
+    // Время (CMD_ID_UTC_TIME, 0x23)
+    val timeReading: Boolean = false,
+    val timeSetting: Boolean = false,
+    val timeCur: Long = 0,          // прочитанное с устройства (сек)
+    val timeCurSet: Long = 0,       // когда было установлено (сек, если пришло 8 байт)
+    val timeReadOk: Boolean = false,
+    val timeReadError: String? = null,
+    val timeSetOk: Boolean = false,
+    val timeSetError: String? = null
 )
 
 @SuppressLint("MissingPermission")
@@ -64,7 +74,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val d = deviceOrError(); if (d is BluetoothDeviceOrError.Error) {
             _sensor.value = _sensor.value.copy(error = d.message); return
         }
-        _sensor.value = _sensor.value.copy(loading = true, error = null)
+        _sensor.value = _sensor.value.copy(
+            loading = true,
+            error = null,
+            timeReadOk = false, timeReadError = null,
+            timeSetOk = false, timeSetError = null
+        )
         viewModelScope.launch {
             try {
                 val reply = client.request((d as BluetoothDeviceOrError.Ok).device, byteArrayOf(0x25))
@@ -80,7 +95,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val d = deviceOrError(); if (d is BluetoothDeviceOrError.Error) {
             _sensor.value = _sensor.value.copy(error = d.message); return
         }
-        _sensor.value = _sensor.value.copy(saving = true, error = null)
+        _sensor.value = _sensor.value.copy(
+            saving = true,
+            error = null,
+            timeReadOk = false, timeReadError = null,
+            timeSetOk = false, timeSetError = null
+        )
         viewModelScope.launch {
             try {
                 val s = _sensor.value
@@ -110,7 +130,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun resetSensor() {
         val d = deviceOrError(); if (d is BluetoothDeviceOrError.Error) return
-        _sensor.value = _sensor.value.copy(saving = true, error = null)
+        _sensor.value = _sensor.value.copy(
+            saving = true,
+            error = null,
+            timeReadOk = false, timeReadError = null,
+            timeSetOk = false, timeSetError = null
+        )
         viewModelScope.launch {
             try {
                 val reply = client.request((d as BluetoothDeviceOrError.Ok).device, byteArrayOf(0x26))
@@ -134,6 +159,113 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             tempZ = tempZ ?: s.tempZ,
             humiZ = humiZ ?: s.humiZ
         )
+    }
+
+    // ---- CMD_ID_UTC_TIME (0x23) ---------------------------------------------
+
+    /** Прочитать текущее время с устройства. */
+    fun readDeviceTime() {
+        val d = deviceOrError(); if (d is BluetoothDeviceOrError.Error) {
+            _sensor.value = _sensor.value.copy(timeReadError = d.message, timeReadOk = false)
+            return
+        }
+        _sensor.value = _sensor.value.copy(
+            timeReading = true,
+            timeReadOk = false,
+            timeReadError = null,
+            timeSetOk = false,
+            timeSetError = null
+        )
+        viewModelScope.launch {
+            try {
+                val reply = client.request((d as BluetoothDeviceOrError.Ok).device, byteArrayOf(0x23))
+                if (reply.size >= 5 && (reply[0].toInt() and 0xFF) == 0x23) {
+                    val cur = readU32(reply, 1)
+                    val set = if (reply.size >= 9) readU32(reply, 5) else 0L
+                    _sensor.value = _sensor.value.copy(
+                        timeReading = false,
+                        timeReadOk = true,
+                        timeReadError = null,
+                        timeCur = cur,
+                        timeCurSet = set
+                    )
+                    Log.d(TAG, "readDeviceTime ok: cur=$cur, set=$set")
+                } else {
+                    _sensor.value = _sensor.value.copy(
+                        timeReading = false,
+                        timeReadOk = false,
+                        timeReadError = "Неверный ответ устройства"
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "readDeviceTime", e)
+                _sensor.value = _sensor.value.copy(
+                    timeReading = false,
+                    timeReadOk = false,
+                    timeReadError = e.message ?: "Ошибка чтения времени"
+                )
+            }
+        }
+    }
+
+    /** Установить текущее локальное время на устройстве. */
+    fun setDeviceTime() {
+        val d = deviceOrError(); if (d is BluetoothDeviceOrError.Error) {
+            _sensor.value = _sensor.value.copy(timeSetError = d.message, timeSetOk = false)
+            return
+        }
+
+        // Локальное Unix-время (с поправкой на часовой пояс), как в PHY62x2BTHome.html
+        val localSec = (System.currentTimeMillis() / 1000L) -
+                (java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 1000L)
+
+        _sensor.value = _sensor.value.copy(
+            timeSetting = true,
+            timeSetOk = false,
+            timeSetError = null,
+            timeReadOk = false,
+            timeReadError = null
+        )
+
+        viewModelScope.launch {
+            try {
+                val cmd = byteArrayOf(
+                    0x23,
+                    (localSec and 0xFF).toByte(),
+                    ((localSec shr 8) and 0xFF).toByte(),
+                    ((localSec shr 16) and 0xFF).toByte(),
+                    ((localSec shr 24) and 0xFF).toByte()
+                )
+                val reply = client.request((d as BluetoothDeviceOrError.Ok).device, cmd)
+                if (reply.size >= 5 && (reply[0].toInt() and 0xFF) == 0x23) {
+                    val cur = readU32(reply, 1)
+                    val set = if (reply.size >= 9) readU32(reply, 5) else 0L
+                    _sensor.value = _sensor.value.copy(
+                        timeSetting = false,
+                        timeSetOk = true,
+                        timeSetError = null,
+                        timeCur = cur,
+                        timeCurSet = set,
+                        timeReadOk = true,
+                        timeReadError = null
+                    )
+                    Log.d(TAG, "setDeviceTime ok: cur=$cur, set=$set, local=$localSec")
+                } else {
+                    _sensor.value = _sensor.value.copy(
+                        timeSetting = false,
+                        timeSetOk = false,
+                        timeSetError = "Неверный ответ устройства"
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "setDeviceTime", e)
+                _sensor.value = _sensor.value.copy(
+                    timeSetting = false,
+                    timeSetOk = false,
+                    timeSetError = e.message ?: "Ошибка установки времени"
+                )
+            }
+        }
     }
 
     // ---- parsing -----------------------------------------------------------

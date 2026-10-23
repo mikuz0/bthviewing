@@ -44,8 +44,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Применяем сохранённую настройку поворота до setContent,
-        // чтобы не было "мигания" при старте.
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
         if (prefs.getBoolean("lock_portrait", false)) {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -159,8 +157,10 @@ fun AppRoot(
                     val state by viewModel.uiState.collectAsState()
                     SettingsScreen(
                         deviceAddress = state.selectedAddress,
-
-                        mainViewModel = viewModel          // ← новый аргумент
+                        deviceName = state.selectedName
+                            ?: state.lastReading?.deviceName
+                            ?: state.devices[state.selectedAddress]?.name,
+                        mainViewModel = viewModel
                     )
                 }
             }
