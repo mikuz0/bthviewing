@@ -24,7 +24,10 @@ data class UiState(
     val isRefreshingList: Boolean = false,
     val refreshSecondsLeft: Int = 0,
     val isListening: Boolean = false,
-    val showOnlyBthome: Boolean = false
+    val showOnlyBthome: Boolean = false,
+    // Настройки приложения
+    val darkTheme: Boolean = false,
+    val lockPortrait: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -32,7 +35,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val TAG = "MainViewModel"
         private const val REFRESH_DURATION_SECONDS = 120
-        private const val STALE_THRESHOLD_MS = 5 * 60 * 1000L   // 5 минут
+        private const val STALE_THRESHOLD_MS = 5 * 60 * 1000L
 
         private const val PREFS = "main_prefs"
         private const val KEY_SELECTED_ADDRESS = "selected_address"
@@ -40,15 +43,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val KEY_SHOW_ONLY_BTHOME = "show_only_bthome"
         private const val KEY_DEVICES = "devices_json"
         private const val KEY_READINGS_CACHE = "readings_cache_json"
-
-        /** Максимум записей в кэше lastReading. При превышении — удаляем самую старую. */
         private const val MAX_CACHE_ENTRIES = 50
+
+        private const val APP_PREFS = "app_prefs"
+        private const val KEY_DARK = "dark_theme"
+        private const val KEY_LOCK_PORTRAIT = "lock_portrait"
 
         fun isStale(reading: BthomeData): Boolean =
             System.currentTimeMillis() - reading.timestamp > STALE_THRESHOLD_MS
     }
 
     private val prefs = application.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private val appPrefs = application.getSharedPreferences(APP_PREFS, Context.MODE_PRIVATE)
     private val scanner = BthomeScanner(application)
 
     private val _uiState = MutableStateFlow(
@@ -56,10 +62,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             devices = loadDevices(),
             selectedAddress = prefs.getString(KEY_SELECTED_ADDRESS, null),
             selectedName = prefs.getString(KEY_SELECTED_NAME, null),
-            lastReading = null,
-            showOnlyBthome = prefs.getBoolean(KEY_SHOW_ONLY_BTHOME, false)
+            showOnlyBthome = prefs.getBoolean(KEY_SHOW_ONLY_BTHOME, false),
+            darkTheme = appPrefs.getBoolean(KEY_DARK, false),
+            lockPortrait = appPrefs.getBoolean(KEY_LOCK_PORTRAIT, false)
         ).let { s ->
-            // lastReading для восстановленного адреса
             val cached = s.selectedAddress?.let { loadCachedReading(it) }
             s.copy(
                 selectedName = s.selectedName ?: cached?.deviceName,
@@ -75,6 +81,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         startListening()
+    }
+
+    // ---------------------------------------------------- Настройки приложения -
+
+    fun setDarkTheme(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(darkTheme = enabled)
+        appPrefs.edit().putBoolean(KEY_DARK, enabled).apply()
+    }
+
+    fun setLockPortrait(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(lockPortrait = enabled)
+        appPrefs.edit().putBoolean(KEY_LOCK_PORTRAIT, enabled).apply()
     }
 
     // ---------------------------------------------------- Обновление списка -
@@ -192,7 +210,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = _uiState.value
         val name = current.devices[address]?.name
 
-        // Приоритет: свежие данные из скана (devices[address].bthomeData), иначе кэш из prefs.
         val reading = current.devices[address]?.bthomeData
             ?: loadCachedReading(address)
 
@@ -213,7 +230,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearSelectedDevice() {
         stopListening()
-        // Кэш для адреса НЕ стираем — если пользователь вернётся, данные будут.
         _uiState.value = _uiState.value.copy(
             selectedAddress = null,
             selectedName = null,
@@ -228,7 +244,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearDeviceList() {
         _uiState.value = _uiState.value.copy(devices = emptyMap())
         prefs.edit().remove(KEY_DEVICES).apply()
-        // Кэш lastReading не трогаем — данные для адресов могут понадобиться.
     }
 
     fun setShowOnlyBthome(enabled: Boolean) {
@@ -283,7 +298,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             o.put("rssi", reading.rssi)
             map.put(reading.deviceAddress, o)
 
-            // Ограничиваем размер кэша: удаляем самую старую запись
             if (map.length() > MAX_CACHE_ENTRIES) {
                 var oldestKey: String? = null
                 var oldestTs = Long.MAX_VALUE

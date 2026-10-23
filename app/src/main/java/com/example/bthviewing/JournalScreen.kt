@@ -266,6 +266,13 @@ fun JournalScreen(
                 } else {
                     HistoryChart(
                         records = chartRecords,
+                        periodLabel = when (selectedPeriod) {
+                            Period.H6 -> "6h"
+                            Period.DAY -> "day"
+                            Period.WEEK -> "week"
+                            Period.MONTH -> "month"
+                            Period.YEAR -> "year"
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }

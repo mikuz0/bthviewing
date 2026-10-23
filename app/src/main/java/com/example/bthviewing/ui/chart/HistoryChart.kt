@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,21 +22,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -50,6 +49,7 @@ private val CrosshairColor = Color(0xFF000000).copy(alpha = 0.6f)
 @Composable
 fun HistoryChart(
     records: List<com.example.bthviewing.MemoRecord>,
+    periodLabel: String = "day",      // "6h" | "day" | "week" | "month" | "year"
     modifier: Modifier = Modifier
 ) {
     val data = remember(records) { ChartData.from(records) }
@@ -60,13 +60,26 @@ fun HistoryChart(
         return
     }
 
-    // Индекс выделенной точки (-1 = нет)
     var selectedIdx by remember(data) { mutableStateOf(-1) }
 
     val textMeasurer = rememberTextMeasurer()
-    val timeFmt = remember { SimpleDateFormat("dd.MM HH:mm", Locale.getDefault()) }
 
-    // Цвета из темы (без хардкода в Canvas)
+    // Форматы подписей
+    val hmFmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val dmFmt = remember { SimpleDateFormat("dd.MM", Locale.getDefault()) }
+    val myFmt = remember { SimpleDateFormat("MMM yyyy", Locale.getDefault()) }
+    val mFmt = remember { SimpleDateFormat("MMM", Locale.getDefault()) }
+
+    // Формат для плашки — зависит от периода
+    val pointFmt = remember(periodLabel) {
+        when (periodLabel) {
+            "6h", "day" -> SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            "week", "month" -> SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
+            "year" -> SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+            else -> SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
+        }
+    }
+
     val labelStyle = TextStyle(
         color = AxisColor,
         fontSize = 10.sp,
@@ -98,7 +111,7 @@ fun HistoryChart(
                     Text("%.1f %%".format(p.humi), style = valueStyle)
                     Spacer(Modifier.width(16.dp))
                     Text(
-                        timeFmt.format(Date(p.x * 1000L)),
+                        pointFmt.format(Date(p.x * 1000L)),
                         style = valueStyle.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                 }
@@ -148,33 +161,34 @@ fun HistoryChart(
                     end = Offset(w, y),
                     strokeWidth = 1f
                 )
-// Подпись слева — T
+                // Подпись слева — T
                 val tVal = data.tempRange.min + f * data.tempRange.span
                 val tLayout = textMeasurer.measure(
                     text = "%.1f".format(tVal),
                     style = labelStyle,
-                    constraints = androidx.compose.ui.unit.Constraints()
+                    constraints = Constraints()
                 )
                 drawText(
                     textLayoutResult = tLayout,
                     topLeft = Offset(-44f, y - tLayout.size.height / 2f)
                 )
-// Подпись справа — H
+                // Подпись справа — H
                 val hVal = data.humiRange.min + f * data.humiRange.span
                 val hLayout = textMeasurer.measure(
                     text = "%.0f".format(hVal),
                     style = labelStyle,
-                    constraints = androidx.compose.ui.unit.Constraints()
+                    constraints = Constraints()
                 )
                 drawText(
                     textLayoutResult = hLayout,
                     topLeft = Offset(w + 6f, y - hLayout.size.height / 2f)
                 )
-
             }
 
-            // --- Вертикальная сетка и подписи оси X ---
+            // --- Вертикальная сетка и умные подписи оси X ---
             val xTicks = 4
+            var prevDay: Int? = null
+            var prevMonth: Int? = null
             for (i in 0..xTicks) {
                 val f = i / xTicks.toFloat()
                 val x = f * w
@@ -185,10 +199,32 @@ fun HistoryChart(
                     strokeWidth = 1f
                 )
                 val tSec = data.timeMin + (data.timeSpan * f).toLong()
-                val label = timeFmt.format(Date(tSec * 1000L))
-                // Центрируем подпись под тиком
-                val layout = textMeasurer.measure(label, labelStyle)
-                val lx = (x - layout.size.width / 2f).coerceIn(-8f, w - layout.size.width + 8f)
+                val date = Date(tSec * 1000L)
+                val cal = Calendar.getInstance().apply { timeInMillis = tSec * 1000L }
+                val day = cal.get(Calendar.DAY_OF_YEAR)
+                val month = cal.get(Calendar.MONTH)
+
+                val label = when (periodLabel) {
+                    "6h", "day" -> hmFmt.format(date)
+                    "week", "month" ->
+                        if (i == 0 || prevDay == null || prevDay != day) dmFmt.format(date)
+                        else hmFmt.format(date)
+                    "year" ->
+                        if (i == 0) myFmt.format(date)
+                        else if (prevMonth == null || prevMonth != month) mFmt.format(date)
+                        else dmFmt.format(date)
+                    else -> hmFmt.format(date)
+                }
+                prevDay = day
+                prevMonth = month
+
+                val layout = textMeasurer.measure(
+                    text = label,
+                    style = labelStyle,
+                    constraints = Constraints()
+                )
+                val lx = (x - layout.size.width / 2f)
+                    .coerceIn(-8f, w - layout.size.width + 8f)
                 drawText(
                     textLayoutResult = layout,
                     topLeft = Offset(lx, h + 4f)
@@ -243,7 +279,6 @@ private fun nearestIndex(data: ChartData, tapX: Float, width: Float): Int {
     if (data.points.isEmpty() || width <= 0f) return -1
     val frac = (tapX / width).coerceIn(0f, 1f)
     val targetT = data.timeMin + (data.timeSpan * frac).toLong()
-    // Бинарный поиск ближайшего по времени
     var lo = 0
     var hi = data.points.size - 1
     while (lo < hi) {

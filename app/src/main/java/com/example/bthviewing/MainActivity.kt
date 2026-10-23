@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Применяем сохранённый поворот до setContent, чтобы не было «мигания»
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
         if (prefs.getBoolean("lock_portrait", false)) {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -83,15 +84,15 @@ private val bottomNavItems = listOf(
 fun AppRoot(
     onRequestPermissions: () -> Unit,
     viewModel: MainViewModel = viewModel(),
-    journalViewModel: JournalViewModel = viewModel(),
-    appViewModel: AppViewModel = viewModel()
+    journalViewModel: JournalViewModel = viewModel()
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
 
-    val darkTheme by appViewModel.darkTheme.collectAsState()
-    val lockPortrait by appViewModel.lockPortrait.collectAsState()
+    val state by viewModel.uiState.collectAsState()
+    val darkTheme = state.darkTheme
+    val lockPortrait = state.lockPortrait
 
     val context = LocalContext.current
     LaunchedEffect(lockPortrait) {
@@ -142,24 +143,24 @@ fun AppRoot(
                 }
                 composable("journal") {
                     LaunchedEffect(Unit) { viewModel.stopRefresh() }
-                    val state by viewModel.uiState.collectAsState()
+                    val s by viewModel.uiState.collectAsState()
                     JournalScreen(
-                        currentDeviceAddress = state.selectedAddress,
-                        currentDeviceName = state.selectedName
-                            ?: state.lastReading?.deviceName
-                            ?: state.devices[state.selectedAddress]?.name,
+                        currentDeviceAddress = s.selectedAddress,
+                        currentDeviceName = s.selectedName
+                            ?: s.lastReading?.deviceName
+                            ?: s.devices[s.selectedAddress]?.name,
                         viewModel = journalViewModel,
                         mainViewModel = viewModel
                     )
                 }
                 composable("settings") {
                     LaunchedEffect(Unit) { viewModel.stopRefresh() }
-                    val state by viewModel.uiState.collectAsState()
+                    val s by viewModel.uiState.collectAsState()
                     SettingsScreen(
-                        deviceAddress = state.selectedAddress,
-                        deviceName = state.selectedName
-                            ?: state.lastReading?.deviceName
-                            ?: state.devices[state.selectedAddress]?.name,
+                        deviceAddress = s.selectedAddress,
+                        deviceName = s.selectedName
+                            ?: s.lastReading?.deviceName
+                            ?: s.devices[s.selectedAddress]?.name,
                         mainViewModel = viewModel
                     )
                 }

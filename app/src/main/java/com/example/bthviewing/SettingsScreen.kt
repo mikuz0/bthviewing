@@ -53,7 +53,6 @@ fun SettingsScreen(
     deviceAddress: String?,
     deviceName: String?,
     viewModel: SettingsViewModel = viewModel(),
-    appViewModel: AppViewModel = viewModel(),
     mainViewModel: MainViewModel = viewModel()
 ) {
     LaunchedEffect(deviceAddress) {
@@ -79,7 +78,7 @@ fun SettingsScreen(
         }
         when (tab) {
             0 -> SensorTab(viewModel, mainViewModel, deviceAddress, deviceName)
-            1 -> AppTab(appViewModel, mainViewModel)
+            1 -> AppTab(mainViewModel)
         }
     }
 }
@@ -97,12 +96,9 @@ private fun SensorTab(
     val context = LocalContext.current
     val timeFmt = remember { SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()) }
 
-    // Коэффициенты калибровки — свёрнуто по умолчанию, с предупреждением
     var coefficientsExpanded by remember(deviceAddress) { mutableStateOf(false) }
     var showWarningDialog by remember(deviceAddress) { mutableStateOf(false) }
     var warningShownThisSession by remember(deviceAddress) { mutableStateOf(false) }
-
-    // Очистка истории — диалог подтверждения
     var showClearHistoryDialog by remember(deviceAddress) { mutableStateOf(false) }
 
     Column(
@@ -111,7 +107,6 @@ private fun SensorTab(
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
-        // ------------------ Шапка: с каким датчиком работаем ------------------
         Text(
             text = deviceName ?: deviceAddress ?: "Устройство не выбрано",
             fontWeight = FontWeight.Bold,
@@ -123,10 +118,6 @@ private fun SensorTab(
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-
-        // ------------------ Предупреждение о Wi-Fi ------------------
-        if (deviceAddress != null) {
             Spacer(Modifier.height(8.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
@@ -148,32 +139,24 @@ private fun SensorTab(
 
         Spacer(Modifier.height(16.dp))
 
-        // ------------------ Коэффициенты: свёрнуто/развёрнуто ------------------
         if (!coefficientsExpanded) {
-            // Свёрнутое состояние
             Row(
                 Modifier
                     .fillMaxWidth()
                     .clickable {
-                        if (warningShownThisSession) {
-                            coefficientsExpanded = true
-                        } else {
-                            showWarningDialog = true
-                        }
+                        if (warningShownThisSession) coefficientsExpanded = true
+                        else showWarningDialog = true
                     }
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Коэффициенты калибровки",
+                    "Коэффициенты калибровки",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     modifier = Modifier.weight(1f)
                 )
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = "Развернуть"
-                )
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Развернуть")
             }
             Spacer(Modifier.height(4.dp))
             Text(
@@ -185,17 +168,11 @@ private fun SensorTab(
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
                 onClick = {
-                    if (warningShownThisSession) {
-                        coefficientsExpanded = true
-                    } else {
-                        showWarningDialog = true
-                    }
+                    if (warningShownThisSession) coefficientsExpanded = true
+                    else showWarningDialog = true
                 }
-            ) {
-                Text("Показать коэффициенты")
-            }
+            ) { Text("Показать коэффициенты") }
         } else {
-            // Развёрнутое состояние
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -204,15 +181,12 @@ private fun SensorTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Коэффициенты калибровки",
+                    "Коэффициенты калибровки",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     modifier = Modifier.weight(1f)
                 )
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = "Свернуть"
-                )
+                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Свернуть")
             }
             Text(
                 "⚠️ Изменение коэффициентов может привести к неверным показаниям датчика.",
@@ -268,7 +242,6 @@ private fun SensorTab(
                 }
             )
 
-            // Сообщение под кнопками коэффициентов
             if (s.loading || s.saving || (s.phase != null && s.phase != "Готово")) {
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -289,8 +262,7 @@ private fun SensorTab(
             }
         }
 
-        // ------------------ Время датчика ------------------
-
+        // Время датчика
         Spacer(Modifier.height(16.dp))
         HorizontalDivider()
         Spacer(Modifier.height(16.dp))
@@ -344,7 +316,6 @@ private fun SensorTab(
             }
         }
 
-        // Сообщение под кнопками времени
         if (s.timeReading || s.timeSetting || (s.phase != null && s.phase != "Готово")) {
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -360,12 +331,10 @@ private fun SensorTab(
             }
         }
 
-        // Показ прочитанного / установленного времени
         if (s.timeReadOk) {
             Spacer(Modifier.height(8.dp))
             val curSec = s.timeCur
             val isValid = curSec > 1_000_000_000L
-
             val offsetMs = TimeZone.getDefault().getOffset(System.currentTimeMillis())
             val offsetSign = if (offsetMs >= 0) "+" else "-"
             val absOffsetMs = kotlin.math.abs(offsetMs)
@@ -373,18 +342,13 @@ private fun SensorTab(
             val offsetMinutes = (absOffsetMs % 3_600_000) / 60_000
             val utcSuffix = "UTC%s%02d:%02d".format(offsetSign, offsetHours, offsetMinutes)
 
-            val curText = if (isValid) {
-                timeFmt.format(Date(curSec * 1000L))
-            } else {
-                "не установлено (1970)"
-            }
+            val curText = if (isValid) timeFmt.format(Date(curSec * 1000L))
+            else "не установлено (1970)"
             Text(
                 "Время устройства: $curText ($utcSuffix)",
                 fontSize = 13.sp,
-                color = if (isValid)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.error
+                color = if (isValid) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.error
             )
             if (isValid) {
                 val localText = timeFmt.format(Date((curSec + offsetMs / 1000L) * 1000L))
@@ -411,7 +375,6 @@ private fun SensorTab(
                 color = MaterialTheme.colorScheme.primary
             )
         }
-
         s.timeReadError?.let {
             Spacer(Modifier.height(4.dp))
             Text(
@@ -429,8 +392,7 @@ private fun SensorTab(
             )
         }
 
-        // ------------------ История на датчике ------------------
-
+        // История на датчике
         Spacer(Modifier.height(16.dp))
         HorizontalDivider()
         Spacer(Modifier.height(16.dp))
@@ -463,7 +425,6 @@ private fun SensorTab(
             }
         }
 
-        // Сообщение под кнопкой очистки
         if (s.clearingHistory || (s.phase != null && s.phase != "Готово")) {
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -497,7 +458,7 @@ private fun SensorTab(
         }
     }
 
-    // ------------------ Диалог предупреждения коэффициентов ------------------
+    // Диалоги
     if (showWarningDialog) {
         AlertDialog(
             onDismissRequest = { showWarningDialog = false },
@@ -515,19 +476,14 @@ private fun SensorTab(
                     warningShownThisSession = true
                     coefficientsExpanded = true
                     showWarningDialog = false
-                }) {
-                    Text("Я понимаю, открыть")
-                }
+                }) { Text("Я понимаю, открыть") }
             },
             dismissButton = {
-                TextButton(onClick = { showWarningDialog = false }) {
-                    Text("Отмена")
-                }
+                TextButton(onClick = { showWarningDialog = false }) { Text("Отмена") }
             }
         )
     }
 
-    // ------------------ Диалог очистки истории ------------------
     if (showClearHistoryDialog) {
         AlertDialog(
             onDismissRequest = { showClearHistoryDialog = false },
@@ -562,12 +518,10 @@ private fun SensorTab(
 /* ------------------------ Настроить приложение -------------------------- */
 
 @Composable
-private fun AppTab(
-    vm: AppViewModel,
-    mainViewModel: MainViewModel
-) {
-    val dark by vm.darkTheme.collectAsState()
-    val lockPortrait by vm.lockPortrait.collectAsState()
+private fun AppTab(mainViewModel: MainViewModel) {
+    val state by mainViewModel.uiState.collectAsState()
+    val dark = state.darkTheme
+    val lockPortrait = state.lockPortrait
 
     var showClearDialog by remember { mutableStateOf(false) }
 
@@ -592,7 +546,7 @@ private fun AppTab(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Switch(checked = dark, onCheckedChange = { vm.setDarkTheme(it) })
+            Switch(checked = dark, onCheckedChange = { mainViewModel.setDarkTheme(it) })
         }
 
         Spacer(Modifier.height(16.dp))
@@ -614,7 +568,7 @@ private fun AppTab(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Switch(checked = lockPortrait, onCheckedChange = { vm.setLockPortrait(it) })
+            Switch(checked = lockPortrait, onCheckedChange = { mainViewModel.setLockPortrait(it) })
         }
 
         Spacer(Modifier.height(16.dp))
@@ -692,9 +646,7 @@ private fun NumField(label: String, value: String, onCommit: (String) -> Unit) {
     OutlinedButton(
         onClick = { onCommit(txt) },
         modifier = Modifier.height(36.dp)
-    ) {
-        Text("Применить")
-    }
+    ) { Text("Применить") }
     Spacer(Modifier.height(4.dp))
 }
 
