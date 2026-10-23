@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Коэффициенты сенсора (CMD_ID_CFS, 0x25/0x26) + состояние времени (0x23). */
+/** Коэффициенты сенсора (CMD_ID_CFS, 0x25/0x26) + время (0x23) + очистка истории (0x36). */
 data class SensorState(
     val loaded: Boolean = false,
     val loading: Boolean = false,
@@ -28,6 +28,7 @@ data class SensorState(
     val vid: Int = 0,
     val i2cAddr: Int = 0,
 
+    // Время (CMD_ID_UTC_TIME, 0x23)
     val timeReading: Boolean = false,
     val timeSetting: Boolean = false,
     val timeCur: Long = 0,
@@ -35,7 +36,12 @@ data class SensorState(
     val timeReadOk: Boolean = false,
     val timeReadError: String? = null,
     val timeSetOk: Boolean = false,
-    val timeSetError: String? = null
+    val timeSetError: String? = null,
+
+    // Очистка истории (CMD_ID_CLRLOG, 0x36)
+    val clearingHistory: Boolean = false,
+    val clearHistoryOk: Boolean = false,
+    val clearHistoryError: String? = null
 )
 
 @SuppressLint("MissingPermission")
@@ -83,7 +89,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             error = null,
             phase = null,
             timeReadOk = false, timeReadError = null,
-            timeSetOk = false, timeSetError = null
+            timeSetOk = false, timeSetError = null,
+            clearHistoryOk = false, clearHistoryError = null
         )
         viewModelScope.launch {
             try {
@@ -112,7 +119,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             error = null,
             phase = null,
             timeReadOk = false, timeReadError = null,
-            timeSetOk = false, timeSetError = null
+            timeSetOk = false, timeSetError = null,
+            clearHistoryOk = false, clearHistoryError = null
         )
         viewModelScope.launch {
             try {
@@ -154,7 +162,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             error = null,
             phase = null,
             timeReadOk = false, timeReadError = null,
-            timeSetOk = false, timeSetError = null
+            timeSetOk = false, timeSetError = null,
+            clearHistoryOk = false, clearHistoryError = null
         )
         viewModelScope.launch {
             try {
@@ -201,6 +210,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             timeReadError = null,
             timeSetOk = false,
             timeSetError = null,
+            clearHistoryOk = false,
+            clearHistoryError = null,
             phase = null
         )
         viewModelScope.launch {
@@ -257,6 +268,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             timeSetError = null,
             timeReadOk = false,
             timeReadError = null,
+            clearHistoryOk = false,
+            clearHistoryError = null,
             phase = null
         )
 
@@ -307,6 +320,61 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    // ---- CMD_ID_CLRLOG (0x36) -----------------------------------------------
+
+    /**
+     * Очистка истории на датчике.
+     * Команда 0x36 с magic-байтами [0x12, 0x34].
+     * Прошивка вызывает clear_memo() — стирает все сектора журнала (кроме текущего).
+     */
+    fun clearHistory() {
+        val d = deviceOrError(); if (d is BluetoothDeviceOrError.Error) {
+            _sensor.value = _sensor.value.copy(clearHistoryError = d.message, clearHistoryOk = false)
+            return
+        }
+        _sensor.value = _sensor.value.copy(
+            clearingHistory = true,
+            clearHistoryOk = false,
+            clearHistoryError = null,
+            phase = null,
+            timeReadOk = false, timeReadError = null,
+            timeSetOk = false, timeSetError = null
+        )
+        viewModelScope.launch {
+            try {
+                val reply = client.request(
+                    (d as BluetoothDeviceOrError.Ok).device,
+                    byteArrayOf(0x36, 0x12, 0x34),
+                    onPhase = phaseCallback()
+                )
+                if (reply.size >= 2 && (reply[0].toInt() and 0xFF) == 0x36) {
+                    _sensor.value = _sensor.value.copy(
+                        clearingHistory = false,
+                        phase = "Готово",
+                        clearHistoryOk = true,
+                        clearHistoryError = null
+                    )
+                    Log.d(TAG, "clearHistory ok, reply=${reply.size} bytes")
+                } else {
+                    _sensor.value = _sensor.value.copy(
+                        clearingHistory = false,
+                        phase = null,
+                        clearHistoryOk = false,
+                        clearHistoryError = "Неверный ответ устройства"
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "clearHistory", e)
+                _sensor.value = _sensor.value.copy(
+                    clearingHistory = false,
+                    phase = null,
+                    clearHistoryOk = false,
+                    clearHistoryError = e.message ?: "Ошибка очистки истории"
+                )
+            }
+        }
+    }
+
     // ---- parsing -----------------------------------------------------------
 
     private fun parseSensor(reply: ByteArray): SensorState {
@@ -323,7 +391,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             vid = ((reply[15].toInt() and 0xFF) shl 8) or (reply[16].toInt() and 0xFF)
             addr = reply[17].toInt() and 0xFF
         }
-        return SensorState(
+        return _sensor.value.copy(
             loaded = true, loading = false, saving = false, phase = "Готово", error = null,
             tempK = tempK, humiK = humiK, tempZ = tempZ, humiZ = humiZ,
             mid = mid, vid = vid, i2cAddr = addr
@@ -340,6 +408,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         ((d[o].toInt() and 0xFF) or ((d[o + 1].toInt() and 0xFF) shl 8)).toShort().toInt()
 }
 
+/** Мелочь для возврата результата deviceOrError(). */
 sealed class BluetoothDeviceOrError {
     data class Ok(val device: BluetoothDevice) : BluetoothDeviceOrError()
     data class Error(val message: String) : BluetoothDeviceOrError()

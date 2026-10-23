@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -61,8 +62,8 @@ fun SettingsScreen(
 
     val s by viewModel.sensor.collectAsState()
 
-    LaunchedEffect(s.loading, s.saving, s.timeReading, s.timeSetting) {
-        if (!s.loading && !s.saving && !s.timeReading && !s.timeSetting) {
+    LaunchedEffect(s.loading, s.saving, s.timeReading, s.timeSetting, s.clearingHistory) {
+        if (!s.loading && !s.saving && !s.timeReading && !s.timeSetting && !s.clearingHistory) {
             mainViewModel.startListening()
         }
     }
@@ -96,10 +97,13 @@ private fun SensorTab(
     val context = LocalContext.current
     val timeFmt = remember { SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()) }
 
-    // Свёрнутость коэффициентов — сбрасывается при смене устройства через LaunchedEffect
+    // Коэффициенты калибровки — свёрнуто по умолчанию, с предупреждением
     var coefficientsExpanded by remember(deviceAddress) { mutableStateOf(false) }
     var showWarningDialog by remember(deviceAddress) { mutableStateOf(false) }
     var warningShownThisSession by remember(deviceAddress) { mutableStateOf(false) }
+
+    // Очистка истории — диалог подтверждения
+    var showClearHistoryDialog by remember(deviceAddress) { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -424,9 +428,76 @@ private fun SensorTab(
                 color = MaterialTheme.colorScheme.error
             )
         }
+
+        // ------------------ История на датчике ------------------
+
+        Spacer(Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(16.dp))
+
+        Text("История на датчике", fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Удалить все записи истории с датчика. Операция необратима — " +
+                    "восстановить удалённые записи невозможно. " +
+                    "Текущие настройки датчика (коэффициенты, время) не затрагиваются.",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = { showClearHistoryDialog = true },
+            enabled = !s.clearingHistory,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.error
+            )
+        ) {
+            if (s.clearingHistory) {
+                CircularProgressIndicator(Modifier.height(18.dp).width(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Очистка…")
+            } else {
+                Text("Очистить историю")
+            }
+        }
+
+        // Сообщение под кнопкой очистки
+        if (s.clearingHistory || (s.phase != null && s.phase != "Готово")) {
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (s.clearingHistory) {
+                    CircularProgressIndicator(Modifier.height(18.dp).width(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(
+                    text = s.phase ?: "Очистка…",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
+        if (s.clearHistoryOk) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "История на датчике очищена",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        s.clearHistoryError?.let {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Ошибка очистки истории: $it",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
     }
 
-    // ------------------ Диалог предупреждения ------------------
+    // ------------------ Диалог предупреждения коэффициентов ------------------
     if (showWarningDialog) {
         AlertDialog(
             onDismissRequest = { showWarningDialog = false },
@@ -450,6 +521,37 @@ private fun SensorTab(
             },
             dismissButton = {
                 TextButton(onClick = { showWarningDialog = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
+
+    // ------------------ Диалог очистки истории ------------------
+    if (showClearHistoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearHistoryDialog = false },
+            title = { Text("Очистить историю на датчике?") },
+            text = {
+                Text(
+                    "Все записи истории будут удалены с датчика. " +
+                            "Это необратимая операция — восстановить удалённые записи невозможно. " +
+                            "Текущие настройки (коэффициенты, время) не затрагиваются.\n\n" +
+                            "Рекомендуется предварительно сохранить историю (экспорт CSV в «Журнале»), " +
+                            "если она нужна."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearHistoryDialog = false
+                    mainViewModel.stopListening()
+                    vm.clearHistory()
+                }) {
+                    Text("Очистить", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearHistoryDialog = false }) {
                     Text("Отмена")
                 }
             }

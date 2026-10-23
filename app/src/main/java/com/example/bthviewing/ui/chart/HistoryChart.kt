@@ -115,7 +115,7 @@ fun HistoryChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(280.dp)
-                .padding(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 32.dp)
+                .padding(start = 56.dp, end = 60.dp, top = 8.dp, bottom = 32.dp)
                 .pointerInput(data) {
                     detectTapGestures { pos ->
                         selectedIdx = nearestIndex(data, pos.x, size.width.toFloat())
@@ -148,22 +148,29 @@ fun HistoryChart(
                     end = Offset(w, y),
                     strokeWidth = 1f
                 )
-                // Подпись слева — T
+// Подпись слева — T
                 val tVal = data.tempRange.min + f * data.tempRange.span
-                drawText(
-                    textMeasurer = textMeasurer,
+                val tLayout = textMeasurer.measure(
                     text = "%.1f".format(tVal),
-                    topLeft = Offset(-44f, y - 7f),
-                    style = labelStyle
+                    style = labelStyle,
+                    constraints = androidx.compose.ui.unit.Constraints()
                 )
-                // Подпись справа — H
-                val hVal = data.humiRange.min + f * data.humiRange.span
                 drawText(
-                    textMeasurer = textMeasurer,
-                    text = "%.0f".format(hVal),
-                    topLeft = Offset(w + 6f, y - 7f),
-                    style = labelStyle
+                    textLayoutResult = tLayout,
+                    topLeft = Offset(-44f, y - tLayout.size.height / 2f)
                 )
+// Подпись справа — H
+                val hVal = data.humiRange.min + f * data.humiRange.span
+                val hLayout = textMeasurer.measure(
+                    text = "%.0f".format(hVal),
+                    style = labelStyle,
+                    constraints = androidx.compose.ui.unit.Constraints()
+                )
+                drawText(
+                    textLayoutResult = hLayout,
+                    topLeft = Offset(w + 6f, y - hLayout.size.height / 2f)
+                )
+
             }
 
             // --- Вертикальная сетка и подписи оси X ---

@@ -42,11 +42,27 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
     val uiState: StateFlow<JournalUiState> = _uiState.asStateFlow()
     private var job: Job? = null
 
+    /**
+     * Установить целевое устройство. Если адрес тот же — НЕ сбрасываем records,
+     * чтобы при возврате на экран «Журнал» данные сохранялись.
+     * Если адрес изменился — сбрасываем и, если идёт чтение, отменяем его.
+     */
     fun setTarget(address: String?, name: String?) {
-        if (_uiState.value.deviceAddress != address && _uiState.value.isReading) {
+        val current = _uiState.value
+
+        // Тот же датчик — только обновляем имя (если поменялось), остальное не трогаем
+        if (current.deviceAddress == address) {
+            if (current.deviceName != name) {
+                _uiState.value = current.copy(deviceName = name)
+            }
+            return
+        }
+
+        // Смена устройства
+        if (current.isReading) {
             client.cancel()
         }
-        _uiState.value = _uiState.value.copy(
+        _uiState.value = current.copy(
             deviceAddress = address,
             deviceName = name,
             records = emptyList(),
