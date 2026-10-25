@@ -289,7 +289,9 @@ fun JournalScreen(
 @Composable
 private fun SummaryText(records: List<MemoRecord>) {
     val fmt = remember { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()) }
-    val valid = remember(records) { records.filter { it.timeSec > 1_000_000_000L } }
+    val valid = remember(records) {
+        records.filter { it.timeSec > 1_000_000_000L }.sortedBy { it.timeSec }
+    }
     if (valid.isEmpty()) {
         Text(
             "${records.size} записей (время не установлено)",
@@ -309,24 +311,21 @@ private fun SummaryText(records: List<MemoRecord>) {
     )
 }
 
+
 /* ----------------------- Фильтр + усреднение ----------------------- */
 
 private fun buildChartRecords(
     records: List<MemoRecord>,
     period: Period
 ): List<MemoRecord> {
-    // Игнорируем записи с timeSec = 0 (1970)
-    val valid = records.filter { it.timeSec > 1_000_000_000L }
+    val valid = records.filter { it.timeSec > 1_000_000_000L }.sortedBy { it.timeSec }
     if (valid.isEmpty()) return emptyList()
 
     val lastTime = valid.last().timeSec
     val startTime = lastTime - period.durationSec
     val filtered = valid.filter { it.timeSec >= startTime }
 
-    // Если за выбранный период пусто — показываем всё, что есть
     val base = if (filtered.isEmpty()) valid else filtered
-
-    // Усреднение до 30 точек
     return if (base.size <= 30) base else downsampleToAvg(base, 30)
 }
 
