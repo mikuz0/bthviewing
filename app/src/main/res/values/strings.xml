@@ -108,13 +108,13 @@
     <string name="dialog_understand_open">Я понимаю, открыть</string>
 
     <!-- Блок времени -->
-    <string name="time_title">Время датчика</string>
+    <string name="time_title">Время датчика (UTC)</string>
     <string name="time_desc">Прочитать текущее время с датчика или установить его. Новые записи истории будут с правильной датой. Уже записанные — не изменятся.</string>
     <string name="btn_read_time">Прочитать время</string>
     <string name="btn_set_time">Установить время</string>
     <string name="time_setting">Установка…</string>
-    <string name="time_device_fmt">Время устройства: %1$s (%2$s)</string>
-    <string name="time_local_fmt">Локально у вас: %1$s</string>
+    <string name="time_device_fmt">Время устройства: %1$s (UTC)</string>
+    <string name="time_local_fmt">Ваш часовой пояс: %1$s</string>
     <string name="time_last_set_fmt">Последняя установка: %1$s (%2$s)</string>
     <string name="time_not_set">не установлено (1970)</string>
     <string name="time_set_ok">Время установлено</string>

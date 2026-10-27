@@ -108,12 +108,12 @@
     <string name="dialog_understand_open">I understand, open</string>
 
     <!-- Device time -->
-    <string name="time_title">Device time</string>
+    <string name="time_title">Device time (UTC)</string>
     <string name="time_desc">Read current time from the device or set it. New history records will have the correct date. Already recorded ones will not change.</string>
     <string name="btn_read_time">Read time</string>
     <string name="btn_set_time">Set time</string>
     <string name="time_setting">Setting…</string>
-    <string name="time_device_fmt">Device time: %1$s (%2$s)</string>
+    <string name="time_device_fmt">Device time: %1$s (UTC)</string>
     <string name="time_local_fmt">Local time: %1$s</string>
     <string name="time_last_set_fmt">Last set: %1$s (%2$s)</string>
     <string name="time_not_set">not set (1970)</string>
