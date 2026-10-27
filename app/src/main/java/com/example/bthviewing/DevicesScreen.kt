@@ -36,11 +36,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import androidx.compose.material.icons.filled.Stop // дубликат импорта, оставлен для совместимости
 
 @Composable
 fun DevicesScreen(
@@ -49,12 +51,16 @@ fun DevicesScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
+    // Запрос разрешений при первом показе. Прослушивание запускается в MainViewModel.init.
     LaunchedEffect(Unit) {
         onRequestPermissions()
     }
 
+    // При уходе с экрана — остановить обновление списка (прослушивание продолжается).
     DisposableEffect(Unit) {
-        onDispose { viewModel.stopRefresh() }
+        onDispose {
+            viewModel.stopRefresh()
+        }
     }
 
     var devicesExpanded by rememberSaveable { mutableStateOf(true) }
@@ -70,6 +76,7 @@ fun DevicesScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
+        // 1. Кнопка «Обновить список устройств» + таймер + статус прослушивания
         item(key = "header_refresh") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -77,8 +84,11 @@ fun DevicesScreen(
             ) {
                 Button(
                     onClick = {
-                        if (state.isRefreshingList) viewModel.stopRefresh()
-                        else viewModel.refreshDeviceList()
+                        if (state.isRefreshingList) {
+                            viewModel.stopRefresh()
+                        } else {
+                            viewModel.refreshDeviceList()
+                        }
                     },
                     modifier = Modifier.weight(1f)
                 ) {
@@ -89,14 +99,14 @@ fun DevicesScreen(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        if (state.isRefreshingList) "Остановить"
-                        else "Обновить список устройств"
+                        if (state.isRefreshingList) stringResource(R.string.btn_stop)
+                        else stringResource(R.string.btn_refresh_list)
                     )
                 }
                 if (state.isRefreshingList && state.refreshSecondsLeft > 0) {
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        text = "${state.refreshSecondsLeft} с",
+                        text = stringResource(R.string.time_sec, state.refreshSecondsLeft),
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -111,6 +121,7 @@ fun DevicesScreen(
             Spacer(Modifier.height(16.dp))
         }
 
+        // 3. Чекбокс + список (только если раскрыто)
         if (devicesExpanded) {
             item(key = "only_bthome") {
                 Row(
@@ -124,14 +135,15 @@ fun DevicesScreen(
                         checked = state.showOnlyBthome,
                         onCheckedChange = { viewModel.setShowOnlyBthome(it) }
                     )
-                    Text("Показывать только BTHome")
+                    Text(stringResource(R.string.show_only_bthome))
                 }
             }
 
             if (filteredDevices.isEmpty()) {
                 item(key = "empty_list") {
                     Text(
-                        text = if (state.isRefreshingList) "Поиск устройств…" else "Список пуст. Нажмите «Обновить»",
+                        text = if (state.isRefreshingList) stringResource(R.string.searching_devices)
+                        else stringResource(R.string.list_empty),
                         modifier = Modifier.padding(vertical = 8.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -169,50 +181,55 @@ fun DevicesScreen(
             }
         }
 
+        // 4. Разделитель и «Выбранное устройство»
         item(key = "divider") {
             Spacer(Modifier.height(16.dp))
             Divider()
             Spacer(Modifier.height(16.dp))
             AccordionHeader(
-                title = "Выбранное устройство",
+                title = stringResource(R.string.selected_device),
                 expanded = true,
                 onToggle = { },
                 showArrow = false
             )
         }
 
+        // 5. Карточка выбранного
         item(key = "selected_card") {
             val reading = state.lastReading
+            val selectedAddress = state.selectedAddress // <--- ДЕЛАЕМ СНИМОК
+
             if (reading == null) {
-                if (state.selectedAddress != null) {
+                if (selectedAddress != null) { // Теперь компилятор точно знает, что внутри selectedAddress не null
+                    val label = state.selectedName ?: selectedAddress // <--- ИСПОЛЬЗУЕМ СНИМОК
                     Text(
                         text = if (state.isListening)
-                            "Ожидание данных от ${state.selectedName ?: state.selectedAddress}…"
+                            stringResource(R.string.waiting_for_data, label)
                         else
-                            "Нет данных от ${state.selectedName ?: state.selectedAddress}",
+                            stringResource(R.string.no_data_from, label),
+
+
                         modifier = Modifier.padding(vertical = 8.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     Text(
-                        text = "Выберите устройство из списка",
+                        text = stringResource(R.string.choose_device_hint),
                         modifier = Modifier.padding(vertical = 8.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
-                SelectedDeviceCard(
-                    reading = reading,
-                    isStale = MainViewModel.isStale(reading)
-                )
+                SelectedDeviceCard(reading)
             }
         }
 
+        // 6. Ошибка
         if (state.error != null) {
             item(key = "error") {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = "Ошибка: ${state.error}",
+                    text = stringResource(R.string.error_prefix, state.error!!),
                     color = MaterialTheme.colorScheme.error
                 )
             }
@@ -220,6 +237,8 @@ fun DevicesScreen(
     }
 }
 
+/* ------------------------------------------------------------------------- */
+/*                     Вспомогательные composable-функции                    */
 /* ------------------------------------------------------------------------- */
 
 @Composable
@@ -230,7 +249,7 @@ fun ListeningStatus(
 ) {
     if (selectedAddress == null) {
         Text(
-            "Прослушивание: не выбрано устройство",
+            text = stringResource(R.string.status_no_device_selected),
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -239,13 +258,13 @@ fun ListeningStatus(
     val label = selectedName ?: selectedAddress
     if (isListening) {
         Text(
-            "Прослушивание: $label",
+            text = stringResource(R.string.status_listening, label),
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.primary
         )
     } else {
         Text(
-            "Прослушивание приостановлено",
+            text = stringResource(R.string.status_not_listening),
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.error
         )
@@ -278,7 +297,9 @@ fun AccordionHeader(
             Icon(
                 imageVector = if (expanded) Icons.Default.KeyboardArrowUp
                 else Icons.Default.KeyboardArrowDown,
-                contentDescription = if (expanded) "Свернуть" else "Развернуть"
+                contentDescription = stringResource(
+                    if (expanded) R.string.cd_collapse else R.string.cd_expand
+                )
             )
         }
     }
@@ -292,7 +313,7 @@ fun RssiBadge(rssi: Int) {
         else -> MaterialTheme.colorScheme.error
     }
     Text(
-        text = "$rssi dBm",
+        text = stringResource(R.string.label_rssi, rssi),
         fontSize = 12.sp,
         color = color,
         fontWeight = FontWeight.Medium
@@ -300,7 +321,7 @@ fun RssiBadge(rssi: Int) {
 }
 
 @Composable
-fun SelectedDeviceCard(reading: BthomeData, isStale: Boolean) {
+fun SelectedDeviceCard(reading: BthomeData) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -309,6 +330,7 @@ fun SelectedDeviceCard(reading: BthomeData, isStale: Boolean) {
         }
     }
     val elapsedSec = ((now - reading.timestamp) / 1000).coerceAtLeast(0)
+    val isStale = MainViewModel.isStale(reading)
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -319,17 +341,17 @@ fun SelectedDeviceCard(reading: BthomeData, isStale: Boolean) {
             )
             Spacer(Modifier.height(4.dp))
 
-            val updatedText = "Обновлено ${formatElapsed(elapsedSec)} назад"
+            val updatedText = formatElapsed(elapsedSec)
             if (isStale) {
                 Text(
-                    "Устарело: $updatedText",
+                    text = stringResource(R.string.stale_updated_ago, updatedText),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Medium
                 )
             } else {
                 Text(
-                    updatedText,
+                    text = stringResource(R.string.updated_ago, updatedText),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -340,13 +362,16 @@ fun SelectedDeviceCard(reading: BthomeData, isStale: Boolean) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                BigValue("Температура", reading.temperature?.let { "%.1f °C".format(it) } ?: "—", isStale)
-                BigValue("Влажность", reading.humidity?.let { "%.1f %%".format(it) } ?: "—", isStale)
-                BigValue("Батарея", reading.battery?.let { "$it %" } ?: "—", isStale)
+                BigValue(stringResource(R.string.label_temp), reading.temperature?.let { "%.1f °C".format(it) } ?: "—", isStale)
+                BigValue(stringResource(R.string.label_humi), reading.humidity?.let { "%.1f %%".format(it) } ?: "—", isStale)
+                BigValue(stringResource(R.string.label_battery), reading.battery?.let { "$it %" } ?: "—", isStale)
             }
             Spacer(Modifier.height(12.dp))
             Text(
-                "Напряжение: ${reading.voltage?.let { "%.3f V".format(it) } ?: "—"}   ·   RSSI: ${reading.rssi} dBm",
+                text = stringResource(
+                    R.string.label_voltage,
+                    reading.voltage?.let { "%.3f V".format(it) } ?: "—"
+                ) + "   ·   " + stringResource(R.string.label_rssi, reading.rssi),
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
@@ -369,9 +394,12 @@ fun BigValue(label: String, value: String, isStale: Boolean) {
     }
 }
 
-fun formatElapsed(sec: Long): String = when {
-    sec < 60 -> "$sec сек"
-    sec < 3600 -> "${sec / 60} мин"
-    sec < 86400 -> "${sec / 3600} ч"
-    else -> "${sec / 86400} дн"
+@Composable
+fun formatElapsed(sec: Long): String {
+    return when {
+        sec < 60 -> stringResource(R.string.time_sec, sec.toInt())
+        sec < 3600 -> stringResource(R.string.time_min, (sec / 60).toInt())
+        sec < 86400 -> stringResource(R.string.time_hour, (sec / 3600).toInt())
+        else -> stringResource(R.string.time_day, (sec / 86400).toInt())
+    }
 }

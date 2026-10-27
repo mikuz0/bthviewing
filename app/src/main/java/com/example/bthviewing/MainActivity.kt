@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -73,14 +74,14 @@ class MainActivity : ComponentActivity() {
 
 data class BottomNavItem(
     val route: String,
-    val label: String,
+    val labelRes: Int,
     val icon: ImageVector
 )
 
 private val bottomNavItems = listOf(
-    BottomNavItem("devices", "Устройства", Icons.Default.Devices),
-    BottomNavItem("journal", "Журнал", Icons.Default.List),
-    BottomNavItem("settings", "Настройки", Icons.Default.Settings)
+    BottomNavItem("devices", R.string.nav_devices, Icons.Default.Devices),
+    BottomNavItem("journal", R.string.nav_journal, Icons.Default.List),
+    BottomNavItem("settings", R.string.nav_settings, Icons.Default.Settings)
 )
 
 @Composable
@@ -129,6 +130,7 @@ fun AppRoot(
                 NavigationBar {
                     bottomNavItems.forEach { item ->
                         val selected = currentDestination?.hierarchy?.any { it.route == item.route } == true
+                        val label = stringResource(item.labelRes)
                         NavigationBarItem(
                             selected = selected,
                             onClick = {
@@ -140,8 +142,8 @@ fun AppRoot(
                                     restoreState = true
                                 }
                             },
-                            icon = { Icon(item.icon, contentDescription = item.label) },
-                            label = { Text(item.label) }
+                            icon = { Icon(item.icon, contentDescription = label) },
+                            label = { Text(label) }
                         )
                     }
                 }

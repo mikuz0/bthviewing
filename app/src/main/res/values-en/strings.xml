@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- General -->
+    <string name="app_name">BTHome Viewer lite</string>
+    <string name="nav_devices">Devices</string>
+    <string name="nav_journal">Journal</string>
+    <string name="nav_settings">Settings</string>
+    <string name="device_not_selected">No device selected</string>
+    <string name="error_prefix">Error: %1$s</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_clear">Clear</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_collapse">Collapse</string>
+    <string name="cd_expand">Expand</string>
+
+    <!-- Devices Screen -->
+    <string name="btn_refresh_list">Refresh device list</string>
+    <string name="btn_stop">Stop</string>
+    <string name="btn_scan">Scan</string>
+    <string name="status_listening">Listening: %1$s</string>
+    <string name="status_not_listening">Listening paused</string>
+    <string name="status_no_device_selected">Listening: no device selected</string>
+    <string name="list_empty">List is empty. Tap \'Refresh\'</string>
+    <string name="searching_devices">Searching for devices…</string>
+    <string name="show_only_bthome">Show only BTHome</string>
+    <string name="found_devices">Found devices (%1$d)</string>
+    <string name="selected_device">Selected device</string>
+    <string name="waiting_for_data">Waiting for data from %1$s…</string>
+    <string name="no_data_from">No data from %1$s</string>
+    <string name="choose_device_hint">Select a device from the list</string>
+    <string name="updated_ago">Updated %1$s ago</string>
+    <string name="stale_updated_ago">Stale: updated %1$s ago</string>
+
+    <!-- Time formatting -->
+    <string name="time_sec">%1$d sec</string>
+    <string name="time_min">%1$d min</string>
+    <string name="time_hour">%1$d h</string>
+    <string name="time_day">%1$d d</string>
+    <string name="time_week">%1$d wk</string>
+    <string name="time_month">%1$d mo</string>
+    <string name="time_year">%1$d yr</string>
+
+    <!-- Card values -->
+    <string name="label_temp">Temperature</string>
+    <string name="label_humi">Humidity</string>
+    <string name="label_battery">Battery</string>
+    <string name="label_voltage">Voltage: %1$s</string>
+    <string name="label_rssi">RSSI: %1$d dBm</string>
+
+    <!-- Journal Screen -->
+    <string name="btn_read_data">Read data</string>
+    <string name="btn_reading">Reading…</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_cancelling">Stopping…</string>
+    <string name="btn_export_csv">Export CSV</string>
+    <string name="summary_records">%1$d records · %2$s — %3$s (%4$s)</string>
+    <string name="summary_time_not_set">%1$d records (time not set)</string>
+    <string name="tab_table">Table</string>
+    <string name="tab_chart">Chart</string>
+
+    <!-- Reading phases -->
+    <string name="phase_connecting">Connecting…</string>
+    <string name="phase_probe">Checking response…</string>
+    <string name="phase_reading">Reading history…</string>
+    <string name="phase_command">Command…</string>
+    <string name="phase_done">Done</string>
+    <string name="records_read">Read: %1$d</string>
+
+    <string name="history_empty">History is empty</string>
+    <string name="no_data_for_chart">No data to display</string>
+    <string name="chart_hint">Touch the chart to see values</string>
+
+    <!-- Chart periods -->
+    <string name="period_6h">6 hours</string>
+    <string name="period_day">Day</string>
+    <string name="period_week">Week</string>
+    <string name="period_month">Month</string>
+    <string name="period_year">Year</string>
+
+    <!-- Export -->
+    <string name="exported_n_records">Exported %1$d records</string>
+    <string name="export_error">Export error: %1$s</string>
+    <string name="no_data_to_export">No data to export</string>
+
+    <!-- Table -->
+    <string name="time_col">Time</string>
+    <string name="temp_col">T, °C</string>
+    <string name="humi_col">H, %</string>
+
+    <!-- Settings Screen -->
+    <string name="tab_sensor">Configure sensor</string>
+    <string name="tab_app">Configure app</string>
+
+    <!-- Calibration coefficients -->
+    <string name="coeff_title">Calibration coefficients</string>
+    <string name="coeff_warning_short">Changing coefficients may cause incorrect sensor readings. If unsure, do not touch.</string>
+    <string name="coeff_warning_long">Changing calibration coefficients may cause incorrect sensor readings. You can restore correct values with the \'Default\' button, but history with errors will already be recorded.\n\nRead and write the current coefficients.</string>
+    <string name="btn_show_coeff">Show coefficients</string>
+    <string name="coeff_warning_red">⚠️ Changing coefficients may cause incorrect sensor readings.</string>
+    <string name="press_read_coeff">Tap \'Read\' to get current coefficients</string>
+    <string name="sensor_id_fmt">ID: %1$04X-%2$04X, I2C: 0x%3$02X</string>
+    <string name="btn_read">Read</string>
+    <string name="btn_write">Write</string>
+    <string name="btn_default">Default</string>
+    <string name="btn_apply">Apply</string>
+    <string name="dialog_warning_title">Warning</string>
+    <string name="dialog_understand_open">I understand, open</string>
+
+    <!-- Device time -->
+    <string name="time_title">Device time</string>
+    <string name="time_desc">Read current time from the device or set it. New history records will have the correct date. Already recorded ones will not change.</string>
+    <string name="btn_read_time">Read time</string>
+    <string name="btn_set_time">Set time</string>
+    <string name="time_setting">Setting…</string>
+    <string name="time_device_fmt">Device time: %1$s (%2$s)</string>
+    <string name="time_local_fmt">Local time: %1$s</string>
+    <string name="time_last_set_fmt">Last set: %1$s (%2$s)</string>
+    <string name="time_not_set">not set (1970)</string>
+    <string name="time_set_ok">Time set</string>
+    <string name="time_read_error">Time read error: %1$s</string>
+    <string name="time_set_error">Time set error: %1$s</string>
+
+    <!-- Device history -->
+    <string name="history_title">Device history</string>
+    <string name="history_desc">Delete all history records from the device. The operation is irreversible — deleted records cannot be restored. Current device settings (coefficients, time) are not affected.</string>
+    <string name="btn_clear_history">Clear history</string>
+    <string name="clearing_history">Clearing…</string>
+    <string name="history_cleared">Device history cleared</string>
+    <string name="history_clear_error">History clear error: %1$s</string>
+    <string name="dialog_clear_history_title">Clear device history?</string>
+    <string name="dialog_clear_history_text">All history records will be deleted from the device. This is an irreversible operation — deleted records cannot be restored. Current settings (coefficients, time) are not affected.\n\nIt is recommended to save the history first (CSV export in \'Journal\') if needed.</string>
+
+    <!-- App Tab -->
+    <string name="app_appearance">Appearance</string>
+    <string name="app_dark_theme">Dark theme</string>
+    <string name="app_dark_theme_on">Enabled</string>
+    <string name="app_dark_theme_off">Disabled</string>
+    <string name="app_screen">Screen</string>
+    <string name="app_lock_portrait">Lock screen orientation</string>
+    <string name="app_lock_portrait_on">Portrait only</string>
+    <string name="app_lock_portrait_off">Free rotation</string>
+    <string name="app_data">Data</string>
+    <string name="app_clear_devices">Clear device list</string>
+    <string name="app_clear_devices_desc">Removes the saved list of found devices. The selected sensor and current readings remain.</string>
+    <string name="app_saved_locally">Settings are stored on the device and applied immediately.</string>
+    <string name="dialog_clear_devices_title">Clear device list?</string>
+    <string name="dialog_clear_devices_text">The list of found devices will be deleted. You can refresh it later with the \'Refresh device list\' button. The selected sensor will remain.</string>
+
+    <!-- Wi-Fi -->
+    <string name="wifi_warning">Turn off Wi-Fi (2.4 GHz interferes with BLE).</string>
+    <string name="wifi_on">Wi-Fi: on</string>
+    <string name="wifi_off">Wi-Fi: off</string>
+    <string name="wifi_unknown">Wi-Fi: unknown</string>
+
+    <!-- Errors -->
+    <string name="err_ble_133">BLE 133: device is busy with another device, Wi-Fi (2.4 GHz) or other wireless interference. Make sure the selected device is active, turn off Wi-Fi and try again.</string>
+    <string name="err_gatt_status">GATT status=%1$d</string>
+    <string name="err_device_disconnected">Device disconnected</string>
+    <string name="err_device_disconnected_reading">Device disconnected during reading</string>
+    <string name="err_cant_connect">Failed to connect</string>
+    <string name="err_service_not_found">Service 0xFCD2 not found</string>
+    <string name="err_char_not_found">Characteristic 0xFFF4 not found</string>
+    <string name="err_notify_enable">setCharacteristicNotification() returned false</string>
+    <string name="err_discover_failed">discoverServices() failed to start</string>
+    <string name="err_descriptor_write">Descriptor write error: status=%1$d</string>
+    <string name="err_write_char_failed">writeCharacteristic failed</string>
+    <string name="err_write_probe">Failed to send probe</string>
+    <string name="err_send_probe">Failed to send 0x00 (DEVID)</string>
+    <string name="err_send_logger">Failed to send 0x35 (LOGGER)</string>
+    <string name="err_connect_gatt_null">connectGatt returned null</string>
+    <string name="err_empty_command">Empty command</string>
+    <string name="err_device_no_response">Device not responding</string>
+    <string name="err_read_timeout">History read timeout</string>
+    <string name="err_device_no_response_ms">Device did not respond within %1$d ms</string>
+    <string name="err_bluetooth_off">Bluetooth is off</string>
+    <string name="err_no_bluetooth_permission">No Bluetooth permission</string>
+    <string name="err_scan_failed">Scan error</string>
+    <string name="err_device_not_found">Device not found</string>
+    <string name="err_reading">Read error</string>
+    <string name="err_writing">Write error</string>
+    <string name="err_listening">Listening error</string>
+    <string name="err_invalid_response">Invalid device response</string>
+    <string name="err_short_response">Short response</string>
+    <string name="err_export">Export error</string>
+    <string name="err_no_response">No response from device</string>
+    <string name="err_scan_failed_code">Scan failed: %1$d</string>
+    <string name="err_read_time">Time read error</string>
+    <string name="err_set_time">Time set error</string>
+    <string name="err_clear_history">History clear error</string>
+
+    <!-- CSV / Chart -->
+    <string name="csv_header">Time-Data=(A2/86400)+25569;Temp;Humi;Vbat</string>
+    <string name="chart_temp">T (°C)</string>
+    <string name="chart_humi">H (%)</string>
+    <string name="chart_date">Date</string>
+    <string name="chart_temp_short">T</string>
+    <string name="chart_humi_short">H</string>
+</resources>

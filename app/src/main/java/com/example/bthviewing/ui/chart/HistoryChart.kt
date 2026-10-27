@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.bthviewing.R
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -55,7 +57,7 @@ fun HistoryChart(
     val data = remember(records) { ChartData.from(records) }
     if (data.points.isEmpty()) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Нет данных для графика", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.no_data_for_chart), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
@@ -104,10 +106,20 @@ fun HistoryChart(
             if (idx in data.points.indices) {
                 val p = data.points[idx]
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("T ", color = TempColor, fontWeight = FontWeight.Bold, style = valueStyle)
+                    Text(
+                        stringResource(R.string.chart_temp_short),
+                        color = TempColor,
+                        fontWeight = FontWeight.Bold,
+                        style = valueStyle
+                    )
                     Text("%.2f °C".format(p.temp), style = valueStyle)
                     Spacer(Modifier.width(16.dp))
-                    Text("H ", color = HumiColor, fontWeight = FontWeight.Bold, style = valueStyle)
+                    Text(
+                        stringResource(R.string.chart_humi_short),
+                        color = HumiColor,
+                        fontWeight = FontWeight.Bold,
+                        style = valueStyle
+                    )
                     Text("%.1f %%".format(p.humi), style = valueStyle)
                     Spacer(Modifier.width(16.dp))
                     Text(
@@ -117,7 +129,7 @@ fun HistoryChart(
                 }
             } else {
                 Text(
-                    "Коснитесь графика, чтобы увидеть значения",
+                    stringResource(R.string.chart_hint),
                     style = valueStyle.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
             }

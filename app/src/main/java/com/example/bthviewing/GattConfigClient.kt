@@ -58,15 +58,15 @@ class GattConfigClient(private val context: Context) {
         timeoutMs: Long = DEFAULT_TIMEOUT_MS,
         onPhase: PhaseCallback? = null
     ): ByteArray {
-        if (cmd.isEmpty()) throw IllegalArgumentException("Пустая команда")
+        if (cmd.isEmpty()) throw IllegalArgumentException(context.getString(R.string.err_empty_command))
         val blkId = cmd[0].toInt() and 0xFF
         Log.d(TAG, "request blkId=0x${"%02X".format(blkId)} cmd=${cmd.toHex()}")
 
         val commandPhase = when (blkId) {
-            0x23 -> "Чтение…"
-            0x25, 0x26 -> "Запись…"
-            0x55, 0x56 -> "Запись…"
-            else -> "Команда…"
+            0x23 -> context.getString(R.string.phase_reading)
+            0x25, 0x26 -> context.getString(R.string.btn_write)
+            0x55, 0x56 -> context.getString(R.string.btn_write)
+            else -> context.getString(R.string.phase_command)
         }
 
         return singleAttempt(device, cmd, blkId, timeoutMs, commandPhase, onPhase)
@@ -81,7 +81,7 @@ class GattConfigClient(private val context: Context) {
         commandPhase: String,
         onPhase: PhaseCallback?
     ): ByteArray {
-        onPhase?.onPhase("Подключение…")
+        onPhase?.onPhase(context.getString(R.string.phase_connecting))
         delay(PRE_CONNECT_DELAY_MS)
 
         val replyDeferred = CompletableDeferred<ByteArray>()
@@ -106,9 +106,12 @@ class GattConfigClient(private val context: Context) {
                 }
             }
         } catch (te: kotlinx.coroutines.TimeoutCancellationException) {
-            throw IllegalStateException("Устройство не ответило за $timeoutMs мс", te)
+            throw IllegalStateException(
+                context.getString(R.string.err_device_no_response_ms, timeoutMs),
+                te
+            )
         }
-        onPhase?.onPhase("Готово")
+        onPhase?.onPhase(context.getString(R.string.phase_done))
         return reply
     }
 
@@ -176,7 +179,7 @@ class GattConfigClient(private val context: Context) {
                 g.writeCharacteristic(ch)
             }
             if (!ok) {
-                finish(IllegalStateException("write probe failed"))
+                finish(IllegalStateException(context.getString(R.string.err_write_probe)))
             }
         }
 
@@ -197,7 +200,7 @@ class GattConfigClient(private val context: Context) {
             }
             if (!ok) {
                 Log.w(TAG, "writeCharacteristic вернул ошибку")
-                finish(IllegalStateException("writeCharacteristic failed"))
+                finish(IllegalStateException(context.getString(R.string.err_write_char_failed)))
             }
         }
 
@@ -207,8 +210,8 @@ class GattConfigClient(private val context: Context) {
                 Log.d(TAG, "onConnectionStateChange status=$status newState=$newState")
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     finish(IllegalStateException(
-                        if (status == 133) "BLE 133: датчик занят другим устройством, мешает Wi-Fi (2.4 ГГц) или другие беспроводные интерфейсы. Убедитесь, что выбранный датчик активен, отключите Wi-Fi и повторите."
-                        else "GATT status=$status"
+                        if (status == 133) context.getString(R.string.err_ble_133)
+                        else context.getString(R.string.err_gatt_status, status)
                     ))
                     return
                 }
@@ -220,24 +223,24 @@ class GattConfigClient(private val context: Context) {
                             Log.w(TAG, "requestConnectionPriority", e)
                         }
                         if (!g.discoverServices()) {
-                            finish(IllegalStateException("discoverServices() вернул false"))
+                            finish(IllegalStateException(context.getString(R.string.err_discover_failed)))
                         }
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> if (!finished)
-                        finish(IllegalStateException("Устройство отключилось"))
+                        finish(IllegalStateException(context.getString(R.string.err_device_disconnected)))
                 }
             }
 
             override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
                 if (status != BluetoothGatt.GATT_SUCCESS) {
-                    finish(IllegalStateException("discoverServices status=$status")); return
+                    finish(IllegalStateException(context.getString(R.string.err_gatt_status, status))); return
                 }
                 val ch = g.getService(SERVICE_FCD2)?.getCharacteristic(CHAR_CMD)
                 if (ch == null) {
-                    finish(IllegalStateException("0xFFF4 не найдена")); return
+                    finish(IllegalStateException(context.getString(R.string.err_char_not_found))); return
                 }
                 if (!g.setCharacteristicNotification(ch, true)) {
-                    finish(IllegalStateException("setCharacteristicNotification=false")); return
+                    finish(IllegalStateException(context.getString(R.string.err_notify_enable))); return
                 }
                 val desc = ch.getDescriptor(CCCD)
                 if (desc == null) {
@@ -262,10 +265,10 @@ class GattConfigClient(private val context: Context) {
                 status: Int
             ) {
                 if (status != BluetoothGatt.GATT_SUCCESS) {
-                    finish(IllegalStateException("descriptor write status=$status")); return
+                    finish(IllegalStateException(context.getString(R.string.err_descriptor_write, status))); return
                 }
                 val ch = g.getService(SERVICE_FCD2)?.getCharacteristic(CHAR_CMD)
-                if (ch == null) { finish(IllegalStateException("0xFFF4 пропала")); return }
+                if (ch == null) { finish(IllegalStateException(context.getString(R.string.err_char_not_found))); return }
                 doProbeAndCommand(g, ch)
             }
 
@@ -277,7 +280,7 @@ class GattConfigClient(private val context: Context) {
                 g: BluetoothGatt,
                 ch: BluetoothGattCharacteristic
             ) {
-                onPhase?.onPhase("Проверка отклика…")
+                onPhase?.onPhase(context.getString(R.string.phase_probe))
                 sendProbe(g, ch)
                 launch {
                     val ok = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
@@ -291,7 +294,7 @@ class GattConfigClient(private val context: Context) {
                     if (finished) return@launch
                     if (!ok) {
                         Log.w(TAG, "probe timeout ($PROBE_TIMEOUT_MS ms)")
-                        finish(IllegalStateException("Датчик не отвечает"))
+                        finish(IllegalStateException(context.getString(R.string.err_device_no_response)))
                         return@launch
                     }
                     Log.d(TAG, "probe ok, send command")
@@ -349,7 +352,7 @@ class GattConfigClient(private val context: Context) {
         Log.d(TAG, "connectGatt ${device.address} (autoConnect=false)")
         gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
         if (gatt == null) {
-            finish(IllegalStateException("connectGatt=null"))
+            finish(IllegalStateException(context.getString(R.string.err_connect_gatt_null)))
             return@callbackFlow
         }
 

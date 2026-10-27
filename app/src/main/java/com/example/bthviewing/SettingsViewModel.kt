@@ -20,6 +20,7 @@ data class SensorState(
     val saving: Boolean = false,
     val error: String? = null,
     val phase: String? = null,
+    val isFinished: Boolean = false,
     val tempK: Long = 0,
     val humiK: Long = 0,
     val tempZ: Int = 0,
@@ -51,6 +52,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         private const val TAG = "SettingsVM"
     }
 
+    private val app = application
     private val client = GattConfigClient(application)
 
     private var lastDeviceAddress: String? = null
@@ -70,11 +72,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun deviceOrError(): BluetoothDeviceOrError {
-        val addr = lastDeviceAddress ?: return BluetoothDeviceOrError.Error("Устройство не выбрано")
+        val addr = lastDeviceAddress
+            ?: return BluetoothDeviceOrError.Error(app.getString(R.string.device_not_selected))
         val mgr = getApplication<Application>()
             .getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         val dev = mgr?.adapter?.getRemoteDevice(addr)
-            ?: return BluetoothDeviceOrError.Error("Устройство не найдено")
+            ?: return BluetoothDeviceOrError.Error(app.getString(R.string.err_device_not_found))
         return BluetoothDeviceOrError.Ok(dev)
     }
 
@@ -88,6 +91,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             loading = true,
             error = null,
             phase = null,
+            isFinished = false,
             timeReadOk = false, timeReadError = null,
             timeSetOk = false, timeSetError = null,
             clearHistoryOk = false, clearHistoryError = null
@@ -103,8 +107,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             } catch (e: Exception) {
                 Log.w(TAG, "readSensor", e)
                 _sensor.value = _sensor.value.copy(
-                    loading = false, phase = null,
-                    error = e.message ?: "Ошибка чтения"
+                    loading = false, phase = null, isFinished = false,
+                    error = e.message ?: app.getString(R.string.err_reading)
                 )
             }
         }
@@ -118,6 +122,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             saving = true,
             error = null,
             phase = null,
+            isFinished = false,
             timeReadOk = false, timeReadError = null,
             timeSetOk = false, timeSetError = null,
             clearHistoryOk = false, clearHistoryError = null
@@ -148,8 +153,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             } catch (e: Exception) {
                 Log.w(TAG, "writeSensor", e)
                 _sensor.value = _sensor.value.copy(
-                    saving = false, phase = null,
-                    error = e.message ?: "Ошибка записи"
+                    saving = false, phase = null, isFinished = false,
+                    error = e.message ?: app.getString(R.string.err_writing)
                 )
             }
         }
@@ -161,6 +166,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             saving = true,
             error = null,
             phase = null,
+            isFinished = false,
             timeReadOk = false, timeReadError = null,
             timeSetOk = false, timeSetError = null,
             clearHistoryOk = false, clearHistoryError = null
@@ -175,8 +181,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _sensor.value = parseSensor(reply)
             } catch (e: Exception) {
                 _sensor.value = _sensor.value.copy(
-                    saving = false, phase = null,
-                    error = e.message ?: "Ошибка"
+                    saving = false, phase = null, isFinished = false,
+                    error = e.message ?: app.getString(R.string.err_writing)
                 )
             }
         }
@@ -212,7 +218,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             timeSetError = null,
             clearHistoryOk = false,
             clearHistoryError = null,
-            phase = null
+            phase = null,
+            isFinished = false
         )
         viewModelScope.launch {
             try {
@@ -226,7 +233,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     val set = if (reply.size >= 9) readU32(reply, 5) else 0L
                     _sensor.value = _sensor.value.copy(
                         timeReading = false,
-                        phase = "Готово",
+                        phase = app.getString(R.string.phase_done),
+                        isFinished = true,
                         timeReadOk = true,
                         timeReadError = null,
                         timeCur = cur,
@@ -237,8 +245,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     _sensor.value = _sensor.value.copy(
                         timeReading = false,
                         phase = null,
+                        isFinished = false,
                         timeReadOk = false,
-                        timeReadError = "Неверный ответ устройства"
+                        timeReadError = app.getString(R.string.err_invalid_response)
                     )
                 }
             } catch (e: Exception) {
@@ -246,8 +255,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _sensor.value = _sensor.value.copy(
                     timeReading = false,
                     phase = null,
+                    isFinished = false,
                     timeReadOk = false,
-                    timeReadError = e.message ?: "Ошибка чтения времени"
+                    timeReadError = e.message ?: app.getString(R.string.err_read_time)
                 )
             }
         }
@@ -270,7 +280,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             timeReadError = null,
             clearHistoryOk = false,
             clearHistoryError = null,
-            phase = null
+            phase = null,
+            isFinished = false
         )
 
         viewModelScope.launch {
@@ -291,7 +302,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     val set = if (reply.size >= 9) readU32(reply, 5) else 0L
                     _sensor.value = _sensor.value.copy(
                         timeSetting = false,
-                        phase = "Готово",
+                        phase = app.getString(R.string.phase_done),
+                        isFinished = true,
                         timeSetOk = true,
                         timeSetError = null,
                         timeCur = cur,
@@ -304,8 +316,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     _sensor.value = _sensor.value.copy(
                         timeSetting = false,
                         phase = null,
+                        isFinished = false,
                         timeSetOk = false,
-                        timeSetError = "Неверный ответ устройства"
+                        timeSetError = app.getString(R.string.err_invalid_response)
                     )
                 }
             } catch (e: Exception) {
@@ -313,8 +326,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _sensor.value = _sensor.value.copy(
                     timeSetting = false,
                     phase = null,
+                    isFinished = false,
                     timeSetOk = false,
-                    timeSetError = e.message ?: "Ошибка установки времени"
+                    timeSetError = e.message ?: app.getString(R.string.err_set_time)
                 )
             }
         }
@@ -337,6 +351,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             clearHistoryOk = false,
             clearHistoryError = null,
             phase = null,
+            isFinished = false,
             timeReadOk = false, timeReadError = null,
             timeSetOk = false, timeSetError = null
         )
@@ -350,7 +365,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 if (reply.size >= 2 && (reply[0].toInt() and 0xFF) == 0x36) {
                     _sensor.value = _sensor.value.copy(
                         clearingHistory = false,
-                        phase = "Готово",
+                        phase = app.getString(R.string.phase_done),
+                        isFinished = true,
                         clearHistoryOk = true,
                         clearHistoryError = null
                     )
@@ -359,8 +375,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     _sensor.value = _sensor.value.copy(
                         clearingHistory = false,
                         phase = null,
+                        isFinished = false,
                         clearHistoryOk = false,
-                        clearHistoryError = "Неверный ответ устройства"
+                        clearHistoryError = app.getString(R.string.err_invalid_response)
                     )
                 }
             } catch (e: Exception) {
@@ -368,8 +385,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _sensor.value = _sensor.value.copy(
                     clearingHistory = false,
                     phase = null,
+                    isFinished = false,
                     clearHistoryOk = false,
-                    clearHistoryError = e.message ?: "Ошибка очистки истории"
+                    clearHistoryError = e.message ?: app.getString(R.string.err_clear_history)
                 )
             }
         }
@@ -379,7 +397,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private fun parseSensor(reply: ByteArray): SensorState {
         if (reply.size < 13) {
-            return _sensor.value.copy(loading = false, saving = false, phase = null, error = "Короткий ответ")
+            return _sensor.value.copy(
+                loading = false, saving = false, phase = null, isFinished = false,
+                error = app.getString(R.string.err_short_response)
+            )
         }
         val tempK = readU32(reply, 1)
         val humiK = readU32(reply, 5)
@@ -392,7 +413,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             addr = reply[17].toInt() and 0xFF
         }
         return _sensor.value.copy(
-            loaded = true, loading = false, saving = false, phase = "Готово", error = null,
+            loaded = true, loading = false, saving = false,
+            phase = app.getString(R.string.phase_done), isFinished = true, error = null,
             tempK = tempK, humiK = humiK, tempZ = tempZ, humiZ = humiZ,
             mid = mid, vid = vid, i2cAddr = addr
         )

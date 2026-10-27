@@ -27,7 +27,8 @@ data class JournalUiState(
     val error: String? = null,
     val done: Boolean = false,
     val isExporting: Boolean = false,
-    val exportMessage: String? = null
+    val exportMessage: String? = null,
+    val exportOk: Boolean? = null
 )
 
 @SuppressLint("MissingPermission")
@@ -37,6 +38,7 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
         private const val TAG = "JournalViewModel"
     }
 
+    private val app = application
     private val client = GattMemoClient(application)
     private val _uiState = MutableStateFlow(JournalUiState())
     val uiState: StateFlow<JournalUiState> = _uiState.asStateFlow()
@@ -71,7 +73,8 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
             isReading = false,
             isCancelling = false,
             phase = null,
-            exportMessage = null
+            exportMessage = null,
+            exportOk = null
         )
     }
 
@@ -86,7 +89,7 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
         val mgr = getApplication<Application>()
             .getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         val device = mgr?.adapter?.getRemoteDevice(address) ?: run {
-            _uiState.value = _uiState.value.copy(error = "Устройство не найдено")
+            _uiState.value = _uiState.value.copy(error = app.getString(R.string.err_device_not_found))
             return
         }
 
@@ -94,11 +97,12 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
         _uiState.value = _uiState.value.copy(
             isReading = true,
             isCancelling = false,
-            phase = "Подключение…",
+            phase = app.getString(R.string.phase_connecting),
             records = emptyList(),
             done = false,
             error = null,
-            exportMessage = null
+            exportMessage = null,
+            exportOk = null
         )
 
         job = viewModelScope.launch {
@@ -106,12 +110,13 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
                 client.readHistory(device, GattMemoClient.ALL_RECORDS).collect { ev ->
                     when (ev) {
                         GattMemoClient.Event.Probe -> {
-                            _uiState.value = _uiState.value.copy(phase = "Проверка отклика…")
+                            _uiState.value = _uiState.value.copy(phase = app.getString(R.string.phase_probe))
                         }
                         is GattMemoClient.Event.Record -> {
                             val cur = _uiState.value
-                            val newPhase = if (cur.phase == "Чтение истории…") cur.phase
-                            else "Чтение истории…"
+                            // Не сравниваем строку фазы: если записей ещё нет — ставим "reading"
+                            val newPhase = if (cur.records.isEmpty()) app.getString(R.string.phase_reading)
+                            else cur.phase
                             _uiState.value = cur.copy(
                                 phase = newPhase,
                                 records = cur.records + ev.record
@@ -122,7 +127,7 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
                             _uiState.value = _uiState.value.copy(
                                 isReading = false,
                                 isCancelling = false,
-                                phase = "Готово",
+                                phase = app.getString(R.string.phase_done),
                                 done = true
                             )
                         }
@@ -155,7 +160,7 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
                     isReading = false,
                     isCancelling = false,
                     phase = null,
-                    error = e.message ?: "Ошибка чтения"
+                    error = e.message ?: app.getString(R.string.err_reading)
                 )
             }
         }
@@ -165,7 +170,7 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
         if (!_uiState.value.isReading) return
         _uiState.value = _uiState.value.copy(
             isCancelling = true,
-            phase = "Остановка…"
+            phase = app.getString(R.string.btn_cancelling)
         )
         client.cancel()
     }
@@ -173,10 +178,13 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
     fun exportCsv(uri: Uri) {
         val records = _uiState.value.records
         if (records.isEmpty()) {
-            _uiState.value = _uiState.value.copy(exportMessage = "Нет данных для экспорта")
+            _uiState.value = _uiState.value.copy(
+                exportMessage = app.getString(R.string.no_data_to_export),
+                exportOk = false
+            )
             return
         }
-        _uiState.value = _uiState.value.copy(isExporting = true, exportMessage = null)
+        _uiState.value = _uiState.value.copy(isExporting = true, exportMessage = null, exportOk = null)
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
@@ -189,20 +197,22 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
                 }
                 _uiState.value = _uiState.value.copy(
                     isExporting = false,
-                    exportMessage = "Экспортировано ${records.size} записей"
+                    exportMessage = app.getString(R.string.exported_n_records, records.size),
+                    exportOk = true
                 )
             } catch (e: Exception) {
                 Log.w(TAG, "exportCsv", e)
                 _uiState.value = _uiState.value.copy(
                     isExporting = false,
-                    exportMessage = "Ошибка экспорта: ${e.message}"
+                    exportMessage = app.getString(R.string.export_error, e.message ?: ""),
+                    exportOk = false
                 )
             }
         }
     }
 
     fun clearExportMessage() {
-        _uiState.value = _uiState.value.copy(exportMessage = null)
+        _uiState.value = _uiState.value.copy(exportMessage = null, exportOk = null)
     }
 
     override fun onCleared() {

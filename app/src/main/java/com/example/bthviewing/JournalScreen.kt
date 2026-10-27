@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,12 +49,12 @@ import java.util.Date
 import java.util.Locale
 
 /** Периоды для графика. */
-private enum class Period(val label: String, val durationSec: Long) {
-    H6("6 часов", 6 * 3600L),
-    DAY("Сутки", 24 * 3600L),
-    WEEK("Неделя", 7 * 86400L),
-    MONTH("Месяц", 30 * 86400L),
-    YEAR("Год", 365 * 86400L)
+private enum class Period(val resId: Int, val durationSec: Long) {
+    H6(R.string.period_6h, 6 * 3600L),
+    DAY(R.string.period_day, 24 * 3600L),
+    WEEK(R.string.period_week, 7 * 86400L),
+    MONTH(R.string.period_month, 30 * 86400L),
+    YEAR(R.string.period_year, 365 * 86400L)
 }
 
 @Composable
@@ -98,7 +99,7 @@ fun JournalScreen(
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         // ---------- Шапка: имя + адрес датчика ----------
         Text(
-            text = state.deviceName ?: deviceAddress ?: "Устройство не выбрано",
+            text = state.deviceName ?: deviceAddress ?: stringResource(R.string.device_not_selected),
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp
         )
@@ -119,13 +120,13 @@ fun JournalScreen(
             Text(
                 text = wifiText,
                 fontSize = 12.sp,
-                color = if (wifiText.contains("включён"))
+                color = if (wifiText.contains(stringResource(R.string.wifi_on)))
                     MaterialTheme.colorScheme.error
                 else
                     MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "Отключите Wi-Fi (2.4 ГГц мешает BLE).",
+                text = stringResource(R.string.wifi_warning),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -142,7 +143,10 @@ fun JournalScreen(
                 },
                 enabled = state.deviceAddress != null && !state.isReading
             ) {
-                Text(if (state.isReading) "Чтение…" else "Считать данные")
+                Text(
+                    if (state.isReading) stringResource(R.string.btn_reading) 
+                    else stringResource(R.string.btn_read_data)
+                )
             }
             if (state.isReading) {
                 Spacer(Modifier.width(12.dp))
@@ -153,7 +157,10 @@ fun JournalScreen(
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) {
-                    Text(if (state.isCancelling) "Остановка…" else "Отменить")
+                    Text(
+                        if (state.isCancelling) stringResource(R.string.btn_cancelling) 
+                        else stringResource(R.string.btn_cancel)
+                    )
                 }
             }
             Spacer(Modifier.width(12.dp))
@@ -172,16 +179,17 @@ fun JournalScreen(
                     Icon(Icons.Default.Share, contentDescription = null)
                 }
                 Spacer(Modifier.width(6.dp))
-                Text("Экспорт CSV")
+                Text(stringResource(R.string.btn_export_csv))
             }
         }
+
 
         state.exportMessage?.let {
             Spacer(Modifier.height(6.dp))
             Text(
                 it,
                 fontSize = 13.sp,
-                color = if (it.startsWith("Ошибка"))
+                color = if (state.exportOk == false)
                     MaterialTheme.colorScheme.error
                 else
                     MaterialTheme.colorScheme.primary
@@ -195,13 +203,13 @@ fun JournalScreen(
                 Spacer(Modifier.width(8.dp))
                 Column {
                     Text(
-                        text = state.phase ?: "Чтение…",
+                        text = state.phase ?: stringResource(R.string.btn_reading),
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     if (state.records.isNotEmpty()) {
                         Text(
-                            "Прочитано: ${state.records.size}",
+                            stringResource(R.string.records_read, state.records.size),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -212,10 +220,10 @@ fun JournalScreen(
 
         state.error?.let {
             Spacer(Modifier.height(8.dp))
-            Text("Ошибка: $it", color = MaterialTheme.colorScheme.error)
+            Text(stringResource(R.string.error_prefix, it), color = MaterialTheme.colorScheme.error)
         }
 
-        // ---------- Сводка объёма (видна на обеих вкладках) ----------
+        // ---------- Сводка объёма ----------
         if (state.records.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             SummaryText(state.records)
@@ -224,8 +232,8 @@ fun JournalScreen(
         if (state.records.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             TabRow(selectedTabIndex = tab) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Таблица") })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("График") })
+                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.tab_table)) })
+                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.tab_chart)) })
             }
             if (tab == 0) {
                 RecordsTable(state.records)
@@ -242,11 +250,11 @@ fun JournalScreen(
                         val selected = p == selectedPeriod
                         if (selected) {
                             Button(onClick = { selectedPeriod = p }) {
-                                Text(p.label, fontSize = 13.sp)
+                                Text(stringResource(p.resId), fontSize = 13.sp)
                             }
                         } else {
                             OutlinedButton(onClick = { selectedPeriod = p }) {
-                                Text(p.label, fontSize = 13.sp)
+                                Text(stringResource(p.resId), fontSize = 13.sp)
                             }
                         }
                     }
@@ -259,7 +267,7 @@ fun JournalScreen(
 
                 if (chartRecords.isEmpty()) {
                     Text(
-                        "Нет данных для отображения",
+                        stringResource(R.string.no_data_for_chart),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp
                     )
@@ -279,7 +287,7 @@ fun JournalScreen(
             }
         } else if (state.done) {
             Spacer(Modifier.height(8.dp))
-            Text("История пуста", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.history_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -294,7 +302,7 @@ private fun SummaryText(records: List<MemoRecord>) {
     }
     if (valid.isEmpty()) {
         Text(
-            "${records.size} записей (время не установлено)",
+            stringResource(R.string.summary_time_not_set, records.size),
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -304,13 +312,17 @@ private fun SummaryText(records: List<MemoRecord>) {
     val last = valid.last().timeSec
     val periodText = formatPeriod(last - first)
     Text(
-        "${records.size} записей · ${fmt.format(Date(first * 1000L))} — " +
-                "${fmt.format(Date(last * 1000L))} ($periodText)",
+        stringResource(
+            R.string.summary_records,
+            records.size,
+            fmt.format(Date(first * 1000L)),
+            fmt.format(Date(last * 1000L)),
+            periodText
+        ),
         fontSize = 12.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }
-
 
 /* ----------------------- Фильтр + усреднение ----------------------- */
 
@@ -326,6 +338,7 @@ private fun buildChartRecords(
     val filtered = valid.filter { it.timeSec >= startTime }
 
     val base = if (filtered.isEmpty()) valid else filtered
+
     return if (base.size <= 30) base else downsampleToAvg(base, 30)
 }
 
@@ -355,13 +368,14 @@ private fun downsampleToAvg(records: List<MemoRecord>, targetCount: Int): List<M
     return result
 }
 
+@Composable
 private fun formatPeriod(seconds: Long): String = when {
-    seconds < 3600 -> "${(seconds / 60).coerceAtLeast(1)} мин"
-    seconds < 86400 -> "${seconds / 3600} ч"
-    seconds < 7 * 86400 -> "${seconds / 86400} дн"
-    seconds < 30 * 86400 -> "${seconds / (7 * 86400)} нед"
-    seconds < 365 * 86400 -> "${seconds / (30 * 86400)} мес"
-    else -> "${seconds / (365 * 86400)} г"
+    seconds < 3600 -> stringResource(R.string.time_min, (seconds / 60).toInt().coerceAtLeast(1))
+    seconds < 86400 -> stringResource(R.string.time_hour, (seconds / 3600).toInt())
+    seconds < 7 * 86400 -> stringResource(R.string.time_day, (seconds / 86400).toInt())
+    seconds < 30 * 86400 -> stringResource(R.string.time_week, (seconds / (7 * 86400)).toInt())
+    seconds < 365 * 86400 -> stringResource(R.string.time_month, (seconds / (30 * 86400)).toInt())
+    else -> stringResource(R.string.time_year, (seconds / (365 * 86400)).toInt())
 }
 
 /* ----------------------- Таблица ----------------------- */
@@ -371,9 +385,9 @@ fun RecordsTable(records: List<MemoRecord>) {
     val fmt = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-            Text("Время", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.4f))
-            Text("T, °C", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            Text("H, %", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.time_col), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.4f))
+            Text(stringResource(R.string.temp_col), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.humi_col), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
         }
         HorizontalDivider()
         LazyColumn {

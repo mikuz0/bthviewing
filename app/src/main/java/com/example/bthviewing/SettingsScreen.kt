@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,7 +68,10 @@ fun SettingsScreen(
         }
     }
 
-    val tabs = listOf("Настроить датчик", "Настроить приложение")
+    val tabs = listOf(
+        stringResource(R.string.tab_sensor),
+        stringResource(R.string.tab_app)
+    )
     var tab by remember { mutableStateOf(0) }
 
     Column(Modifier.fillMaxSize()) {
@@ -108,7 +112,7 @@ private fun SensorTab(
             .padding(16.dp)
     ) {
         Text(
-            text = deviceName ?: deviceAddress ?: "Устройство не выбрано",
+            text = deviceName ?: deviceAddress ?: stringResource(R.string.device_not_selected),
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp
         )
@@ -125,13 +129,13 @@ private fun SensorTab(
             Text(
                 text = wifiText,
                 fontSize = 12.sp,
-                color = if (wifiText.contains("включён"))
+                color = if (wifiText.contains(stringResource(R.string.wifi_on)))
                     MaterialTheme.colorScheme.error
                 else
                     MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "Отключите Wi-Fi (2.4 ГГц мешает BLE).",
+                text = stringResource(R.string.wifi_warning),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -139,6 +143,7 @@ private fun SensorTab(
 
         Spacer(Modifier.height(16.dp))
 
+        // Коэффициенты
         if (!coefficientsExpanded) {
             Row(
                 Modifier
@@ -151,17 +156,16 @@ private fun SensorTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Коэффициенты калибровки",
+                    stringResource(R.string.coeff_title),
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     modifier = Modifier.weight(1f)
                 )
-                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Развернуть")
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                "Изменение коэффициентов может привести к неверным показаниям " +
-                        "датчика. Если не уверены — не трогайте.",
+                stringResource(R.string.coeff_warning_short),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -171,7 +175,7 @@ private fun SensorTab(
                     if (warningShownThisSession) coefficientsExpanded = true
                     else showWarningDialog = true
                 }
-            ) { Text("Показать коэффициенты") }
+            ) { Text(stringResource(R.string.btn_show_coeff)) }
         } else {
             Row(
                 Modifier
@@ -181,15 +185,15 @@ private fun SensorTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Коэффициенты калибровки",
+                    stringResource(R.string.coeff_title),
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     modifier = Modifier.weight(1f)
                 )
-                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Свернуть")
+                Icon(Icons.Default.KeyboardArrowUp, contentDescription = null)
             }
             Text(
-                "⚠️ Изменение коэффициентов может привести к неверным показаниям датчика.",
+                stringResource(R.string.coeff_warning_red),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.error
             )
@@ -197,14 +201,14 @@ private fun SensorTab(
 
             if (s.mid == 0 && s.vid == 0 && !s.loaded) {
                 Text(
-                    "Нажмите «Прочитать», чтобы получить текущие коэффициенты",
+                    stringResource(R.string.press_read_coeff),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
                 Spacer(Modifier.height(12.dp))
             } else {
                 Text(
-                    "ID: %04X-%04X, I2C: 0x%02X".format(s.mid, s.vid, s.i2cAddr),
+                    stringResource(R.string.sensor_id_fmt, s.mid, s.vid, s.i2cAddr),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -242,7 +246,7 @@ private fun SensorTab(
                 }
             )
 
-            if (s.loading || s.saving || (s.phase != null && s.phase != "Готово")) {
+            if (s.loading || s.saving || (s.phase != null && !s.isFinished)) {
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (s.loading || s.saving) {
@@ -250,7 +254,8 @@ private fun SensorTab(
                         Spacer(Modifier.width(8.dp))
                     }
                     Text(
-                        text = s.phase ?: if (s.loading) "Чтение…" else "Запись…",
+                        text = s.phase ?: if (s.loading) stringResource(R.string.btn_reading) 
+                                       else stringResource(R.string.btn_write),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -258,21 +263,19 @@ private fun SensorTab(
             }
             s.error?.let {
                 Spacer(Modifier.height(8.dp))
-                Text("Ошибка: $it", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.error_prefix, it), color = MaterialTheme.colorScheme.error)
             }
         }
 
-        // Время датчика
+        // Время
         Spacer(Modifier.height(16.dp))
         HorizontalDivider()
         Spacer(Modifier.height(16.dp))
 
-        Text("Время датчика", fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.time_title), fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Прочитать текущее время с датчика или установить его. " +
-                    "Новые записи истории будут с правильной датой. " +
-                    "Уже записанные — не изменятся.",
+            stringResource(R.string.time_desc),
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -293,9 +296,9 @@ private fun SensorTab(
                 if (s.timeReading) {
                     CircularProgressIndicator(Modifier.height(18.dp).width(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Чтение…")
+                    Text(stringResource(R.string.btn_reading))
                 } else {
-                    Text("Прочитать время")
+                    Text(stringResource(R.string.btn_read_time))
                 }
             }
             Button(
@@ -309,14 +312,14 @@ private fun SensorTab(
                 if (s.timeSetting) {
                     CircularProgressIndicator(Modifier.height(18.dp).width(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Установка…")
+                    Text(stringResource(R.string.time_setting))
                 } else {
-                    Text("Установить время")
+                    Text(stringResource(R.string.btn_set_time))
                 }
             }
         }
 
-        if (s.timeReading || s.timeSetting || (s.phase != null && s.phase != "Готово")) {
+        if (s.timeReading || s.timeSetting || (s.phase != null && !s.isFinished)) {
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (s.timeReading || s.timeSetting) {
@@ -324,7 +327,8 @@ private fun SensorTab(
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(
-                    text = s.phase ?: if (s.timeReading) "Чтение…" else "Установка…",
+                    text = s.phase ?: if (s.timeReading) stringResource(R.string.btn_reading) 
+                                   else stringResource(R.string.time_setting),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -343,24 +347,24 @@ private fun SensorTab(
             val utcSuffix = "UTC%s%02d:%02d".format(offsetSign, offsetHours, offsetMinutes)
 
             val curText = if (isValid) timeFmt.format(Date(curSec * 1000L))
-            else "не установлено (1970)"
+                          else stringResource(R.string.time_not_set)
             Text(
-                "Время устройства: $curText ($utcSuffix)",
+                stringResource(R.string.time_device_fmt, curText, utcSuffix),
                 fontSize = 13.sp,
                 color = if (isValid) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.error
             )
             if (isValid) {
                 val localText = timeFmt.format(Date((curSec + offsetMs / 1000L) * 1000L))
                 Text(
-                    "Локально у вас: $localText",
+                    stringResource(R.string.time_local_fmt, localText),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             if (s.timeCurSet > 1_000_000_000L) {
                 Text(
-                    "Последняя установка: ${timeFmt.format(Date(s.timeCurSet * 1000L))} ($utcSuffix)",
+                    stringResource(R.string.time_last_set_fmt, timeFmt.format(Date(s.timeCurSet * 1000L)), utcSuffix),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -369,40 +373,26 @@ private fun SensorTab(
 
         if (s.timeSetOk) {
             Spacer(Modifier.height(4.dp))
-            Text(
-                "Время установлено",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Text(stringResource(R.string.time_set_ok), fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
         }
         s.timeReadError?.let {
             Spacer(Modifier.height(4.dp))
-            Text(
-                "Ошибка чтения времени: $it",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.error
-            )
+            Text(stringResource(R.string.time_read_error, it), fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
         }
         s.timeSetError?.let {
             Spacer(Modifier.height(4.dp))
-            Text(
-                "Ошибка установки времени: $it",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.error
-            )
+            Text(stringResource(R.string.time_set_error, it), fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
         }
 
-        // История на датчике
+        // История
         Spacer(Modifier.height(16.dp))
         HorizontalDivider()
         Spacer(Modifier.height(16.dp))
 
-        Text("История на датчике", fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.history_title), fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Удалить все записи истории с датчика. Операция необратима — " +
-                    "восстановить удалённые записи невозможно. " +
-                    "Текущие настройки датчика (коэффициенты, время) не затрагиваются.",
+            stringResource(R.string.history_desc),
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -412,20 +402,18 @@ private fun SensorTab(
             onClick = { showClearHistoryDialog = true },
             enabled = !s.clearingHistory,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.error
-            )
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
         ) {
             if (s.clearingHistory) {
                 CircularProgressIndicator(Modifier.height(18.dp).width(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Очистка…")
+                Text(stringResource(R.string.clearing_history))
             } else {
-                Text("Очистить историю")
+                Text(stringResource(R.string.btn_clear_history))
             }
         }
 
-        if (s.clearingHistory || (s.phase != null && s.phase != "Готово")) {
+        if (s.clearingHistory || (s.phase != null && !s.isFinished)) {
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (s.clearingHistory) {
@@ -433,7 +421,7 @@ private fun SensorTab(
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(
-                    text = s.phase ?: "Очистка…",
+                    text = s.phase ?: stringResource(R.string.clearing_history),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -442,19 +430,11 @@ private fun SensorTab(
 
         if (s.clearHistoryOk) {
             Spacer(Modifier.height(4.dp))
-            Text(
-                "История на датчике очищена",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Text(stringResource(R.string.history_cleared), fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
         }
         s.clearHistoryError?.let {
             Spacer(Modifier.height(4.dp))
-            Text(
-                "Ошибка очистки истории: $it",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.error
-            )
+            Text(stringResource(R.string.history_clear_error, it), fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
         }
     }
 
@@ -462,24 +442,17 @@ private fun SensorTab(
     if (showWarningDialog) {
         AlertDialog(
             onDismissRequest = { showWarningDialog = false },
-            title = { Text("Внимание") },
-            text = {
-                Text(
-                    "Изменение коэффициентов калибровки может привести к неверным " +
-                            "показаниям датчика. Восстановить правильные значения можно " +
-                            "кнопкой «Default», но история с ошибкой уже будет записана.\n\n" +
-                            "Считайте и запишите действующие коэффициенты."
-                )
-            },
+            title = { Text(stringResource(R.string.dialog_warning_title)) },
+            text = { Text(stringResource(R.string.coeff_warning_long)) },
             confirmButton = {
                 TextButton(onClick = {
                     warningShownThisSession = true
                     coefficientsExpanded = true
                     showWarningDialog = false
-                }) { Text("Я понимаю, открыть") }
+                }) { Text(stringResource(R.string.dialog_understand_open)) }
             },
             dismissButton = {
-                TextButton(onClick = { showWarningDialog = false }) { Text("Отмена") }
+                TextButton(onClick = { showWarningDialog = false }) { Text(stringResource(R.string.dialog_cancel)) }
             }
         )
     }
@@ -487,29 +460,17 @@ private fun SensorTab(
     if (showClearHistoryDialog) {
         AlertDialog(
             onDismissRequest = { showClearHistoryDialog = false },
-            title = { Text("Очистить историю на датчике?") },
-            text = {
-                Text(
-                    "Все записи истории будут удалены с датчика. " +
-                            "Это необратимая операция — восстановить удалённые записи невозможно. " +
-                            "Текущие настройки (коэффициенты, время) не затрагиваются.\n\n" +
-                            "Рекомендуется предварительно сохранить историю (экспорт CSV в «Журнале»), " +
-                            "если она нужна."
-                )
-            },
+            title = { Text(stringResource(R.string.dialog_clear_history_title)) },
+            text = { Text(stringResource(R.string.dialog_clear_history_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     showClearHistoryDialog = false
                     mainViewModel.stopListening()
                     vm.clearHistory()
-                }) {
-                    Text("Очистить", color = MaterialTheme.colorScheme.error)
-                }
+                }) { Text(stringResource(R.string.dialog_clear), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showClearHistoryDialog = false }) {
-                    Text("Отмена")
-                }
+                TextButton(onClick = { showClearHistoryDialog = false }) { Text(stringResource(R.string.dialog_cancel)) }
             }
         )
     }
@@ -531,7 +492,7 @@ private fun AppTab(mainViewModel: MainViewModel) {
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
-        Text("Оформление", fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.app_appearance), fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
 
         Row(
@@ -539,9 +500,10 @@ private fun AppTab(mainViewModel: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Тёмная тема")
+                Text(stringResource(R.string.app_dark_theme))
                 Text(
-                    if (dark) "Включена" else "Выключена",
+                    if (dark) stringResource(R.string.app_dark_theme_on) 
+                    else stringResource(R.string.app_dark_theme_off),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -553,7 +515,7 @@ private fun AppTab(mainViewModel: MainViewModel) {
         HorizontalDivider()
         Spacer(Modifier.height(16.dp))
 
-        Text("Экран", fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.app_screen), fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
 
         Row(
@@ -561,9 +523,10 @@ private fun AppTab(mainViewModel: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Запретить поворот экрана")
+                Text(stringResource(R.string.app_lock_portrait))
                 Text(
-                    if (lockPortrait) "Только книжная ориентация" else "Свободный поворот",
+                    if (lockPortrait) stringResource(R.string.app_lock_portrait_on) 
+                    else stringResource(R.string.app_lock_portrait_off),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -575,19 +538,17 @@ private fun AppTab(mainViewModel: MainViewModel) {
         HorizontalDivider()
         Spacer(Modifier.height(16.dp))
 
-        Text("Данные", fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.app_data), fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
 
         OutlinedButton(
             onClick = { showClearDialog = true },
             modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Очистить список устройств")
-        }
+        ) { Text(stringResource(R.string.app_clear_devices)) }
+        
         Spacer(Modifier.height(4.dp))
         Text(
-            "Удаляет сохранённый список найденных устройств. " +
-                    "Выбранный датчик и текущие показания остаются.",
+            stringResource(R.string.app_clear_devices_desc),
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -597,7 +558,7 @@ private fun AppTab(mainViewModel: MainViewModel) {
         Spacer(Modifier.height(16.dp))
 
         Text(
-            "Настройки хранятся на устройстве и применяются сразу.",
+            stringResource(R.string.app_saved_locally),
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -606,26 +567,16 @@ private fun AppTab(mainViewModel: MainViewModel) {
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            title = { Text("Очистить список устройств?") },
-            text = {
-                Text(
-                    "Список найденных устройств будет удалён. " +
-                            "При необходимости его можно будет обновить кнопкой «Обновить список устройств». " +
-                            "Выбранный датчик останется."
-                )
-            },
+            title = { Text(stringResource(R.string.dialog_clear_devices_title)) },
+            text = { Text(stringResource(R.string.dialog_clear_devices_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     mainViewModel.clearDeviceList()
                     showClearDialog = false
-                }) {
-                    Text("Очистить", color = MaterialTheme.colorScheme.error)
-                }
+                }) { Text(stringResource(R.string.dialog_clear), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showClearDialog = false }) {
-                    Text("Отмена")
-                }
+                TextButton(onClick = { showClearDialog = false }) { Text(stringResource(R.string.dialog_cancel)) }
             }
         )
     }
@@ -646,7 +597,7 @@ private fun NumField(label: String, value: String, onCommit: (String) -> Unit) {
     OutlinedButton(
         onClick = { onCommit(txt) },
         modifier = Modifier.height(36.dp)
-    ) { Text("Применить") }
+    ) { Text(stringResource(R.string.btn_apply)) }
     Spacer(Modifier.height(4.dp))
 }
 
@@ -663,10 +614,10 @@ private fun ReadWriteDefault(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        OutlinedButton(onClick = onRead, enabled = !loading && !saving) { Text("Прочитать") }
-        Button(onClick = onWrite, enabled = !loading && !saving) { Text("Записать") }
+        OutlinedButton(onClick = onRead, enabled = !loading && !saving) { Text(stringResource(R.string.btn_read)) }
+        Button(onClick = onWrite, enabled = !loading && !saving) { Text(stringResource(R.string.btn_write)) }
         if (onDefault != null) {
-            OutlinedButton(onClick = onDefault, enabled = !loading && !saving) { Text("Default") }
+            OutlinedButton(onClick = onDefault, enabled = !loading && !saving) { Text(stringResource(R.string.btn_default)) }
         }
         if (loading || saving) {
             CircularProgressIndicator(Modifier.height(24.dp).width(24.dp))

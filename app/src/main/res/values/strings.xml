@@ -1,3 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Общие -->
     <string name="app_name">BTHome Viewer lite</string>
+    <string name="nav_devices">Устройства</string>
+    <string name="nav_journal">Журнал</string>
+    <string name="nav_settings">Настройки</string>
+    <string name="device_not_selected">Устройство не выбрано</string>
+    <string name="error_prefix">Ошибка: %1$s</string>
+    <string name="dialog_cancel">Отмена</string>
+    <string name="dialog_clear">Очистить</string>
+
+    <!-- Общие contentDescription -->
+    <string name="cd_collapse">Свернуть</string>
+    <string name="cd_expand">Развернуть</string>
+
+    <!-- Экран "Устройства" (DevicesScreen) -->
+    <string name="btn_refresh_list">Обновить список устройств</string>
+    <string name="btn_stop">Остановить</string>
+    <string name="btn_scan">Сканировать</string>
+    <string name="status_listening">Прослушивание: %1$s</string>
+    <string name="status_not_listening">Прослушивание приостановлено</string>
+    <string name="status_no_device_selected">Прослушивание: не выбрано устройство</string>
+    <string name="list_empty">Список пуст. Нажмите «Обновить»</string>
+    <string name="searching_devices">Поиск устройств…</string>
+    <string name="show_only_bthome">Показывать только BTHome</string>
+    <string name="found_devices">Найденные устройства (%1$d)</string>
+    <string name="selected_device">Выбранное устройство</string>
+    <string name="waiting_for_data">Ожидание данных от %1$s…</string>
+    <string name="no_data_from">Нет данных от %1$s</string>
+    <string name="choose_device_hint">Выберите устройство из списка</string>
+    <string name="updated_ago">Обновлено %1$s назад</string>
+    <string name="stale_updated_ago">Устарело: обновлено %1$s назад</string>
+
+    <!-- Форматирование времени -->
+    <string name="time_sec">%1$d сек</string>
+    <string name="time_min">%1$d мин</string>
+    <string name="time_hour">%1$d ч</string>
+    <string name="time_day">%1$d дн</string>
+    <string name="time_week">%1$d нед</string>
+    <string name="time_month">%1$d мес</string>
+    <string name="time_year">%1$d г</string>
+
+    <!-- Значения карточки -->
+    <string name="label_temp">Температура</string>
+    <string name="label_humi">Влажность</string>
+    <string name="label_battery">Батарея</string>
+    <string name="label_voltage">Напряжение: %1$s</string>
+    <string name="label_rssi">RSSI: %1$d dBm</string>
+
+    <!-- Экран "Журнал" (JournalScreen) -->
+    <string name="btn_read_data">Считать данные</string>
+    <string name="btn_reading">Чтение…</string>
+    <string name="btn_cancel">Отменить</string>
+    <string name="btn_cancelling">Остановка…</string>
+    <string name="btn_export_csv">Экспорт CSV</string>
+    <string name="summary_records">%1$d записей · %2$s — %3$s (%4$s)</string>
+    <string name="summary_time_not_set">%1$d записей (время не установлено)</string>
+    <string name="tab_table">Таблица</string>
+    <string name="tab_chart">График</string>
+
+    <!-- Фазы чтения истории -->
+    <string name="phase_connecting">Подключение…</string>
+    <string name="phase_probe">Проверка отклика…</string>
+    <string name="phase_reading">Чтение истории…</string>
+    <string name="phase_command">Команда…</string>
+    <string name="phase_done">Готово</string>
+    <string name="records_read">Прочитано: %1$d</string>
+
+    <string name="history_empty">История пуста</string>
+    <string name="no_data_for_chart">Нет данных для отображения</string>
+    <string name="chart_hint">Коснитесь графика, чтобы увидеть значения</string>
+
+    <!-- Периоды графика -->
+    <string name="period_6h">6 часов</string>
+    <string name="period_day">Сутки</string>
+    <string name="period_week">Неделя</string>
+    <string name="period_month">Месяц</string>
+    <string name="period_year">Год</string>
+
+    <!-- Экспорт -->
+    <string name="exported_n_records">Экспортировано %1$d записей</string>
+    <string name="export_error">Ошибка экспорта: %1$s</string>
+    <string name="no_data_to_export">Нет данных для экспорта</string>
+
+    <!-- Таблица -->
+    <string name="time_col">Время</string>
+    <string name="temp_col">T, °C</string>
+    <string name="humi_col">H, %</string>
+
+    <!-- Экран "Настройки" (SettingsScreen) -->
+    <string name="tab_sensor">Настроить датчик</string>
+    <string name="tab_app">Настроить приложение</string>
+
+    <!-- Блок коэффициентов -->
+    <string name="coeff_title">Коэффициенты калибровки</string>
+    <string name="coeff_warning_short">Изменение коэффициентов может привести к неверным показаниям датчика. Если не уверены — не трогайте.</string>
+    <string name="coeff_warning_long">Изменение коэффициентов калибровки может привести к неверным показаниям датчика. Восстановить правильные значения можно кнопкой «Default», но история с ошибкой уже будет записана.\n\nСчитайте и запишите действующие коэффициенты.</string>
+    <string name="btn_show_coeff">Показать коэффициенты</string>
+    <string name="coeff_warning_red">⚠️ Изменение коэффициентов может привести к неверным показаниям датчика.</string>
+    <string name="press_read_coeff">Нажмите «Прочитать», чтобы получить текущие коэффициенты</string>
+    <string name="sensor_id_fmt">ID: %1$04X-%2$04X, I2C: 0x%3$02X</string>
+    <string name="btn_read">Прочитать</string>
+    <string name="btn_write">Записать</string>
+    <string name="btn_default">Default</string>
+    <string name="btn_apply">Применить</string>
+    <string name="dialog_warning_title">Внимание</string>
+    <string name="dialog_understand_open">Я понимаю, открыть</string>
+
+    <!-- Блок времени -->
+    <string name="time_title">Время датчика</string>
+    <string name="time_desc">Прочитать текущее время с датчика или установить его. Новые записи истории будут с правильной датой. Уже записанные — не изменятся.</string>
+    <string name="btn_read_time">Прочитать время</string>
+    <string name="btn_set_time">Установить время</string>
+    <string name="time_setting">Установка…</string>
+    <string name="time_device_fmt">Время устройства: %1$s (%2$s)</string>
+    <string name="time_local_fmt">Локально у вас: %1$s</string>
+    <string name="time_last_set_fmt">Последняя установка: %1$s (%2$s)</string>
+    <string name="time_not_set">не установлено (1970)</string>
+    <string name="time_set_ok">Время установлено</string>
+    <string name="time_read_error">Ошибка чтения времени: %1$s</string>
+    <string name="time_set_error">Ошибка установки времени: %1$s</string>
+
+    <!-- Блок истории на датчике -->
+    <string name="history_title">История на датчике</string>
+    <string name="history_desc">Удалить все записи истории с датчика. Операция необратима — восстановить удалённые записи невозможно. Текущие настройки датчика (коэффициенты, время) не затрагиваются.</string>
+    <string name="btn_clear_history">Очистить историю</string>
+    <string name="clearing_history">Очистка…</string>
+    <string name="history_cleared">История на датчике очищена</string>
+    <string name="history_clear_error">Ошибка очистки истории: %1$s</string>
+    <string name="dialog_clear_history_title">Очистить историю на датчике?</string>
+    <string name="dialog_clear_history_text">Все записи истории будут удалены с датчика. Это необратимая операция — восстановить удалённые записи невозможно. Текущие настройки (коэффициенты, время) не затрагиваются.\n\nРекомендуется предварительно сохранить историю (экспорт CSV в «Журнале»), если она нужна.</string>
+
+    <!-- Вкладка "Приложение" -->
+    <string name="app_appearance">Оформление</string>
+    <string name="app_dark_theme">Тёмная тема</string>
+    <string name="app_dark_theme_on">Включена</string>
+    <string name="app_dark_theme_off">Выключена</string>
+    <string name="app_screen">Экран</string>
+    <string name="app_lock_portrait">Запретить поворот экрана</string>
+    <string name="app_lock_portrait_on">Только книжная ориентация</string>
+    <string name="app_lock_portrait_off">Свободный поворот</string>
+    <string name="app_data">Данные</string>
+    <string name="app_clear_devices">Очистить список устройств</string>
+    <string name="app_clear_devices_desc">Удаляет сохранённый список найденных устройств. Выбранный датчик и текущие показания остаются.</string>
+    <string name="app_saved_locally">Настройки хранятся на устройстве и применяются сразу.</string>
+    <string name="dialog_clear_devices_title">Очистить список устройств?</string>
+    <string name="dialog_clear_devices_text">Список найденных устройств будет удалён. При необходимости его можно будет обновить кнопкой «Обновить список устройств». Выбранный датчик останется.</string>
+
+    <!-- Wi-Fi -->
+    <string name="wifi_warning">Отключите Wi-Fi (2.4 ГГц мешает BLE).</string>
+    <string name="wifi_on">Wi-Fi: включён</string>
+    <string name="wifi_off">Wi-Fi: выключен</string>
+    <string name="wifi_unknown">Wi-Fi: неизвестно</string>
+
+    <!-- Ошибки (для ViewModel / Client) -->
+    <string name="err_ble_133">BLE 133: датчик занят другим устройством, мешает Wi-Fi (2.4 ГГц) или другие беспроводные интерфейсы. Убедитесь, что выбранный датчик активен, отключите Wi-Fi и повторите.</string>
+    <string name="err_gatt_status">GATT status=%1$d</string>
+    <string name="err_device_disconnected">Устройство отключилось</string>
+    <string name="err_device_disconnected_reading">Устройство отключилось во время чтения</string>
+    <string name="err_cant_connect">Не удалось подключиться</string>
+    <string name="err_service_not_found">Сервис 0xFCD2 не найден</string>
+    <string name="err_char_not_found">Характеристика 0xFFF4 не найдена</string>
+    <string name="err_notify_enable">setCharacteristicNotification() вернул false</string>
+    <string name="err_discover_failed">discoverServices() не запустился</string>
+    <string name="err_descriptor_write">Ошибка записи дескриптора: status=%1$d</string>
+    <string name="err_write_char_failed">writeCharacteristic failed</string>
+    <string name="err_write_probe">Не удалось отправить probe</string>
+    <string name="err_send_probe">Не удалось отправить 0x00 (DEVID)</string>
+    <string name="err_send_logger">Не удалось отправить 0x35 (LOGGER)</string>
+    <string name="err_connect_gatt_null">connectGatt вернул null</string>
+    <string name="err_empty_command">Пустая команда</string>
+    <string name="err_device_no_response">Датчик не отвечает</string>
+    <string name="err_read_timeout">Таймаут чтения истории</string>
+    <string name="err_device_no_response_ms">Устройство не ответило за %1$d мс</string>
+    <string name="err_bluetooth_off">Bluetooth выключен</string>
+    <string name="err_no_bluetooth_permission">Нет разрешений на Bluetooth</string>
+    <string name="err_scan_failed">Ошибка сканирования</string>
+    <string name="err_device_not_found">Устройство не найдено</string>
+    <string name="err_reading">Ошибка чтения</string>
+    <string name="err_writing">Ошибка записи</string>
+    <string name="err_listening">Ошибка прослушивания</string>
+    <string name="err_invalid_response">Неверный ответ устройства</string>
+    <string name="err_short_response">Короткий ответ</string>
+    <string name="err_export">Ошибка экспорта</string>
+    <string name="err_no_response">Нет ответа от устройства</string>
+    <string name="err_scan_failed_code">Scan failed: %1$d</string>
+    <string name="err_read_time">Ошибка чтения времени</string>
+    <string name="err_set_time">Ошибка установки времени</string>
+    <string name="err_clear_history">Ошибка очистки истории</string>
+
+    <!-- CSV / График -->
+    <string name="csv_header">Time-Data=(A2/86400)+25569;Temp;Humi;Vbat</string>
+    <string name="chart_temp">T (°C)</string>
+    <string name="chart_humi">H (%)</string>
+    <string name="chart_date">Date</string>
+    <string name="chart_temp_short">T</string>
+    <string name="chart_humi_short">H</string>
 </resources>
+

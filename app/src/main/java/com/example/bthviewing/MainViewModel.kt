@@ -175,11 +175,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshDeviceList() {
         if (listRefreshJob?.isActive == true) return
         if (!scanner.isBluetoothReady()) {
-            _uiState.value = _uiState.value.copy(error = "Bluetooth выключен")
+            _uiState.value = _uiState.value.copy(
+                error = getApplication<Application>().getString(R.string.err_bluetooth_off)
+            )
             return
         }
         if (!scanner.hasPermissions()) {
-            _uiState.value = _uiState.value.copy(error = "Нет разрешений на Bluetooth")
+            _uiState.value = _uiState.value.copy(
+                error = getApplication<Application>().getString(R.string.err_no_bluetooth_permission)
+            )
             return
         }
 
@@ -204,7 +208,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Log.w(TAG, "refreshDeviceList", e)
                 _uiState.value = _uiState.value.copy(
                     isRefreshingList = false,
-                    error = e.message ?: "Ошибка сканирования"
+                    error = e.message ?: getApplication<Application>().getString(R.string.err_scan_failed)
                 )
             }
         }
@@ -274,7 +278,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Log.w(TAG, "startListening", e)
                 _uiState.value = _uiState.value.copy(
                     isListening = false,
-                    error = e.message ?: "Ошибка прослушивания"
+                    error = e.message ?: getApplication<Application>().getString(R.string.err_listening)
                 )
             }
         }

@@ -130,9 +130,9 @@ class GattMemoClient(private val context: Context) {
                 Log.d(TAG, "onConnectionStateChange status=$status newState=$newState")
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     if (status == 133) {
-                        fail("BLE 133: датчик занят другим устройством, мешает Wi-Fi (2.4 ГГц) или другие беспроводные интерфейсы. Убедитесь, что выбранный датчик активен, отключите Wi-Fi и повторите.")
+                        fail(context.getString(R.string.err_ble_133))
                     } else {
-                        fail("GATT status=$status")
+                        fail(context.getString(R.string.err_gatt_status, status))
                     }
                     return
                 }
@@ -145,14 +145,14 @@ class GattMemoClient(private val context: Context) {
                             Log.w(TAG, "requestConnectionPriority", e)
                         }
                         if (!g.discoverServices()) {
-                            fail("discoverServices() не запустился")
+                            fail(context.getString(R.string.err_discover_failed))
                         }
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         if (!finished) {
                             fail(
-                                if (connected) "Устройство отключилось во время чтения"
-                                else "Не удалось подключиться"
+                                if (connected) context.getString(R.string.err_device_disconnected_reading)
+                                else context.getString(R.string.err_cant_connect)
                             )
                         }
                     }
@@ -161,18 +161,18 @@ class GattMemoClient(private val context: Context) {
 
             override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
                 if (status != BluetoothGatt.GATT_SUCCESS) {
-                    fail("discoverServices status=$status"); return
+                    fail(context.getString(R.string.err_gatt_status, status)); return
                 }
                 val service = g.getService(SERVICE_FCD2)
                 if (service == null) {
-                    fail("Сервис 0xFCD2 не найден"); return
+                    fail(context.getString(R.string.err_service_not_found)); return
                 }
                 val ch = service.getCharacteristic(CHAR_CMD)
                 if (ch == null) {
-                    fail("Характеристика 0xFFF4 не найдена"); return
+                    fail(context.getString(R.string.err_char_not_found)); return
                 }
                 if (!g.setCharacteristicNotification(ch, true)) {
-                    fail("setCharacteristicNotification() вернул false"); return
+                    fail(context.getString(R.string.err_notify_enable)); return
                 }
                 val desc = ch.getDescriptor(CCCD)
                 if (desc == null) {
@@ -196,11 +196,11 @@ class GattMemoClient(private val context: Context) {
                 status: Int
             ) {
                 if (status != BluetoothGatt.GATT_SUCCESS) {
-                    fail("descriptor write status=$status"); return
+                    fail(context.getString(R.string.err_descriptor_write, status)); return
                 }
                 val ch = g.getService(SERVICE_FCD2)?.getCharacteristic(CHAR_CMD)
                 if (ch == null) {
-                    fail("Характеристика 0xFFF4 исчезла"); return
+                    fail(context.getString(R.string.err_char_not_found)); return
                 }
                 doProbeAndRead(g, ch, maxRecords)
             }
@@ -221,7 +221,7 @@ class GattMemoClient(private val context: Context) {
                 val sent = writeBytes(g, ch, byteArrayOf(0x00))
                 if (!sent) {
                     probeDeferred = null
-                    fail("Не удалось отправить 0x00 (DEVID)")
+                    fail(context.getString(R.string.err_send_probe))
                     return
                 }
 
@@ -238,13 +238,13 @@ class GattMemoClient(private val context: Context) {
                     probeDeferred = null
                     if (finished) return@launch
                     if (!ok) {
-                        fail("Датчик не отвечает")
+                        fail(context.getString(R.string.err_device_no_response))
                         return@launch
                     }
                     // Ответ пришёл — читаем историю
                     Log.d(TAG, "probe ok, write 0x35")
                     if (!writeBytes(g, ch, readCommandBytes(maxRecords))) {
-                        fail("Не удалось отправить 0x35 (LOGGER)")
+                        fail(context.getString(R.string.err_send_logger))
                     }
                 }
             }
@@ -328,13 +328,13 @@ class GattMemoClient(private val context: Context) {
         Log.d(TAG, "connectGatt ${device.address} (autoConnect=false)")
         gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
         if (gatt == null) {
-            fail("connectGatt вернул null")
+            fail(context.getString(R.string.err_connect_gatt_null))
             return@callbackFlow
         }
 
         val watchdog = launch(start = CoroutineStart.UNDISPATCHED) {
             delay(READ_TIMEOUT_MS)
-            if (!finished) fail("Таймаут чтения истории")
+            if (!finished) fail(context.getString(R.string.err_read_timeout))
         }
 
         awaitClose {

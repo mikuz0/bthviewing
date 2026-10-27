@@ -13,11 +13,12 @@ object WifiStatus {
     fun text(context: Context): String {
         val wm = context.applicationContext
             .getSystemService(Context.WIFI_SERVICE) as? WifiManager
-            ?: return "Wi-Fi: неизвестно"
+            ?: return context.getString(R.string.wifi_unknown)
         return try {
-            if (wm.isWifiEnabled) "Wi-Fi: включён" else "Wi-Fi: выключен"
+            if (wm.isWifiEnabled) context.getString(R.string.wifi_on)
+            else context.getString(R.string.wifi_off)
         } catch (_: Exception) {
-            "Wi-Fi: неизвестно"
+            context.getString(R.string.wifi_unknown)
         }
     }
 }
