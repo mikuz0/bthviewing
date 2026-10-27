@@ -72,11 +72,7 @@ fun JournalScreen(
         viewModel.setTarget(currentDeviceAddress, currentDeviceName)
     }
 
-    LaunchedEffect(state.isReading) {
-        if (!state.isReading) {
-            mainViewModel.startListening()
-        }
-    }
+
 
     var tab by remember { mutableStateOf(0) }
     var selectedPeriod by remember(state.deviceAddress) { mutableStateOf(Period.DAY) }
@@ -144,7 +140,7 @@ fun JournalScreen(
                 enabled = state.deviceAddress != null && !state.isReading
             ) {
                 Text(
-                    if (state.isReading) stringResource(R.string.btn_reading) 
+                    if (state.isReading) stringResource(R.string.btn_reading)
                     else stringResource(R.string.btn_read_data)
                 )
             }
@@ -158,7 +154,7 @@ fun JournalScreen(
                     )
                 ) {
                     Text(
-                        if (state.isCancelling) stringResource(R.string.btn_cancelling) 
+                        if (state.isCancelling) stringResource(R.string.btn_cancelling)
                         else stringResource(R.string.btn_cancel)
                     )
                 }
@@ -182,7 +178,6 @@ fun JournalScreen(
                 Text(stringResource(R.string.btn_export_csv))
             }
         }
-
 
         state.exportMessage?.let {
             Spacer(Modifier.height(6.dp))

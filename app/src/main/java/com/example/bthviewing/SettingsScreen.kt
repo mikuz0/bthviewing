@@ -62,11 +62,7 @@ fun SettingsScreen(
 
     val s by viewModel.sensor.collectAsState()
 
-    LaunchedEffect(s.loading, s.saving, s.timeReading, s.timeSetting, s.clearingHistory) {
-        if (!s.loading && !s.saving && !s.timeReading && !s.timeSetting && !s.clearingHistory) {
-            mainViewModel.startListening()
-        }
-    }
+
 
     val tabs = listOf(
         stringResource(R.string.tab_sensor),
@@ -254,8 +250,8 @@ private fun SensorTab(
                         Spacer(Modifier.width(8.dp))
                     }
                     Text(
-                        text = s.phase ?: if (s.loading) stringResource(R.string.btn_reading) 
-                                       else stringResource(R.string.btn_write),
+                        text = s.phase ?: if (s.loading) stringResource(R.string.btn_reading)
+                        else stringResource(R.string.btn_write),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -327,8 +323,8 @@ private fun SensorTab(
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(
-                    text = s.phase ?: if (s.timeReading) stringResource(R.string.btn_reading) 
-                                   else stringResource(R.string.time_setting),
+                    text = s.phase ?: if (s.timeReading) stringResource(R.string.btn_reading)
+                    else stringResource(R.string.time_setting),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -347,12 +343,12 @@ private fun SensorTab(
             val utcSuffix = "UTC%s%02d:%02d".format(offsetSign, offsetHours, offsetMinutes)
 
             val curText = if (isValid) timeFmt.format(Date(curSec * 1000L))
-                          else stringResource(R.string.time_not_set)
+            else stringResource(R.string.time_not_set)
             Text(
                 stringResource(R.string.time_device_fmt, curText, utcSuffix),
                 fontSize = 13.sp,
                 color = if (isValid) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.error
             )
             if (isValid) {
                 val localText = timeFmt.format(Date((curSec + offsetMs / 1000L) * 1000L))
@@ -502,7 +498,7 @@ private fun AppTab(mainViewModel: MainViewModel) {
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.app_dark_theme))
                 Text(
-                    if (dark) stringResource(R.string.app_dark_theme_on) 
+                    if (dark) stringResource(R.string.app_dark_theme_on)
                     else stringResource(R.string.app_dark_theme_off),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -525,7 +521,7 @@ private fun AppTab(mainViewModel: MainViewModel) {
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.app_lock_portrait))
                 Text(
-                    if (lockPortrait) stringResource(R.string.app_lock_portrait_on) 
+                    if (lockPortrait) stringResource(R.string.app_lock_portrait_on)
                     else stringResource(R.string.app_lock_portrait_off),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -545,7 +541,7 @@ private fun AppTab(mainViewModel: MainViewModel) {
             onClick = { showClearDialog = true },
             modifier = Modifier.fillMaxWidth()
         ) { Text(stringResource(R.string.app_clear_devices)) }
-        
+
         Spacer(Modifier.height(4.dp))
         Text(
             stringResource(R.string.app_clear_devices_desc),

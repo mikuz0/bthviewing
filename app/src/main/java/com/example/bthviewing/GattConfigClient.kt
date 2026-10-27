@@ -32,7 +32,7 @@ class GattConfigClient(private val context: Context) {
         val CHAR_CMD: UUID = UUID.fromString("0000fff4-0000-1000-8000-00805f9b34fb")
         val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-        private const val PRE_CONNECT_DELAY_MS = 500L
+        private const val PRE_CONNECT_DELAY_MS = 5000L
         private const val DEFAULT_TIMEOUT_MS = 30_000L
         private const val PROBE_TIMEOUT_MS = 5_000L
     }
@@ -217,11 +217,8 @@ class GattConfigClient(private val context: Context) {
                 }
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
-                        try {
-                            g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "requestConnectionPriority", e)
-                        }
+                        // requestConnectionPriority перенесён в onServicesDiscovered:
+                        // на старых чипах вызов до discoverServices конфликтует с discovery.
                         if (!g.discoverServices()) {
                             finish(IllegalStateException(context.getString(R.string.err_discover_failed)))
                         }
@@ -234,6 +231,12 @@ class GattConfigClient(private val context: Context) {
             override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     finish(IllegalStateException(context.getString(R.string.err_gatt_status, status))); return
+                }
+                // Повышаем приоритет соединения после discovery (как в GoSense/blessed).
+                try {
+                    g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                } catch (e: Exception) {
+                    Log.w(TAG, "requestConnectionPriority", e)
                 }
                 val ch = g.getService(SERVICE_FCD2)?.getCharacteristic(CHAR_CMD)
                 if (ch == null) {

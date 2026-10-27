@@ -36,7 +36,7 @@ class GattMemoClient(private val context: Context) {
         const val ALL_RECORDS = 0xFFFF
 
         /** Пауза перед connectGatt. */
-        private const val PRE_CONNECT_DELAY_MS = 500L
+        private const val PRE_CONNECT_DELAY_MS = 5000L
 
         /** Таймаут проверки отклика (0x00 DEVID). */
         private const val PROBE_TIMEOUT_MS = 5_000L
@@ -139,11 +139,8 @@ class GattMemoClient(private val context: Context) {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
                         connected = true
-                        try {
-                            g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "requestConnectionPriority", e)
-                        }
+                        // requestConnectionPriority перенесён в onServicesDiscovered:
+                        // на старых чипах вызов до discoverServices конфликтует с discovery.
                         if (!g.discoverServices()) {
                             fail(context.getString(R.string.err_discover_failed))
                         }
@@ -162,6 +159,12 @@ class GattMemoClient(private val context: Context) {
             override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     fail(context.getString(R.string.err_gatt_status, status)); return
+                }
+                // Повышаем приоритет соединения после discovery (как в GoSense/blessed).
+                try {
+                    g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                } catch (e: Exception) {
+                    Log.w(TAG, "requestConnectionPriority", e)
                 }
                 val service = g.getService(SERVICE_FCD2)
                 if (service == null) {
