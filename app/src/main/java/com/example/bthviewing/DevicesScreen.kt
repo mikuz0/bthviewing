@@ -54,6 +54,7 @@ fun DevicesScreen(
     // Запрос разрешений при первом показе. Прослушивание запускается в MainViewModel.init.
     LaunchedEffect(Unit) {
         onRequestPermissions()
+        viewModel.startListening()
     }
 
     // При уходе с экрана — остановить обновление списка (прослушивание продолжается).

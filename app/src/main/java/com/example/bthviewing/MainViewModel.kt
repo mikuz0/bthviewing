@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -49,10 +48,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val KEY_DARK = "dark_theme"
         private const val KEY_LOCK_PORTRAIT = "lock_portrait"
 
-        /** Фоновый опрос: раз в 15 минут, окно прослушивания 10 с. */
-        private const val BG_POLL_INTERVAL_MS = 15 * 60 * 1000L
-        private const val BG_POLL_WINDOW_MS = 10_000L
-
         fun isStale(reading: BthomeData): Boolean =
             System.currentTimeMillis() - reading.timestamp > STALE_THRESHOLD_MS
     }
@@ -82,7 +77,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var listenJob: Job? = null
     private var listRefreshJob: Job? = null
     private var refreshTimerJob: Job? = null
-    private var backgroundPollJob: Job? = null
 
     /** Флаг: приложение на переднем плане (экран включён, не свернуто). */
     @Volatile
@@ -96,67 +90,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Вызывается из Activity при ON_START / ON_RESUME.
-     * Переключает на быстрое прослушивание и отменяет фоновый редкий опрос.
+     * Возобновляет активное прослушивание.
      */
     fun onAppForeground() {
         if (isAppInForeground) return
-        Log.d(TAG, "onAppForeground: switch to active listening")
+        Log.d(TAG, "onAppForeground: resume listening")
         isAppInForeground = true
-        backgroundPollJob?.cancel()
-        backgroundPollJob = null
         startListening()
     }
 
     /**
      * Вызывается из Activity при ON_STOP / ON_PAUSE.
-     * Останавливает быстрое прослушивание и запускает фоновый редкий опрос.
+     * Останавливает прослушивание: в фоне скан не нужен.
      */
     fun onAppBackground() {
         if (!isAppInForeground) return
-        Log.d(TAG, "onAppBackground: switch to background polling")
+        Log.d(TAG, "onAppBackground: stop listening")
         isAppInForeground = false
         stopListening()
-        startBackgroundPolling()
     }
-
-    /**
-     * Фоновый режим: раз в 15 минут на 10 с включаем scanFor(mac).
-     * Если пакет поймали — обновляем lastReading и кэш, отменяем ожидание в этом цикле.
-     * Работает, пока приложение не убито Android. В Deep Doze — Android
-     * может «заморозить» процесс, тогда данные обновятся при возврате в ON_START.
-     */
-    private fun startBackgroundPolling() {
-        val address = _uiState.value.selectedAddress ?: return
-        if (backgroundPollJob?.isActive == true) return
-
-        backgroundPollJob = viewModelScope.launch {
-            while (!isAppInForeground) {
-                delay(BG_POLL_INTERVAL_MS)
-                if (isAppInForeground) break
-
-                Log.d(TAG, "background polling: window ${BG_POLL_WINDOW_MS}ms")
-                try {
-                    withTimeoutOrNull(BG_POLL_WINDOW_MS) {
-                        scanner.scanFor(address).collect { dev ->
-                            if (dev.address == address && dev.bthomeData != null) {
-                                Log.d(TAG, "background polling: got packet")
-                                _uiState.value = _uiState.value.copy(lastReading = dev.bthomeData)
-                                saveCachedReading(dev.bthomeData, dev.name ?: _uiState.value.selectedName)
-                                throw BackgroundPollDone()
-                            }
-                        }
-                    }
-                } catch (_: BackgroundPollDone) {
-                    // Поймали пакет — выходим из текущего окна, ждём следующего
-                } catch (e: Exception) {
-                    Log.w(TAG, "background polling", e)
-                }
-            }
-            Log.d(TAG, "background polling: stopped")
-        }
-    }
-
-    private class BackgroundPollDone : Exception()
 
     // ---------------------------------------------------- Настройки приложения -
 
@@ -308,8 +260,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearSelectedDevice() {
         stopListening()
-        backgroundPollJob?.cancel()
-        backgroundPollJob = null
         _uiState.value = _uiState.value.copy(
             selectedAddress = null,
             selectedName = null,
@@ -446,7 +396,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         super.onCleared()
         saveDevices(_uiState.value.devices.values)
         stopListening()
-        backgroundPollJob?.cancel()
         listRefreshJob?.cancel()
         refreshTimerJob?.cancel()
     }
