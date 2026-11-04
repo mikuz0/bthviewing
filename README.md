@@ -1,5 +1,6 @@
 # BTHome Viewer Lite
-
+[![Release](https://img.shields.io/github/v/release/mikuz0/bthviewing?include_prereleases&label=Download)](https://github.com/mikuz0/bthviewing/releases/latest)
+[![Android CI](https://github.com/mikuz0/bthviewing/actions/workflows/android.yml/badge.svg)](https://github.com/mikuz0/bthviewing/actions/workflows/android.yml)
 Android-приложение для просмотра данных с датчиков, передающих данные по протоколу **BTHome** через **Bluetooth Low Energy (BLE)**.
 
 ## Возможности
