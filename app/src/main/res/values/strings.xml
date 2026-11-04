@@ -185,6 +185,11 @@
     <string name="err_listening">Ошибка прослушивания</string>
     <string name="err_invalid_response">Неверный ответ устройства</string>
     <string name="err_short_response">Короткий ответ</string>
+
+    <!-- Время: UTC / Местное -->
+    <string name="time_mode_label">Показывать местное время</string>
+    <string name="time_mode_utc">UTC</string>
+    <string name="time_mode_local">Местное</string>
     <string name="err_export">Ошибка экспорта</string>
     <string name="err_no_response">Нет ответа от устройства</string>
     <string name="err_scan_failed_code">Scan failed: %1$d</string>

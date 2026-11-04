@@ -185,6 +185,11 @@
     <string name="err_listening">Listening error</string>
     <string name="err_invalid_response">Invalid device response</string>
     <string name="err_short_response">Short response</string>
+
+    <!-- Time: UTC / Local -->
+    <string name="time_mode_label">Show local time</string>
+    <string name="time_mode_utc">UTC</string>
+    <string name="time_mode_local">Local</string>
     <string name="err_export">Export error</string>
     <string name="err_no_response">No response from device</string>
     <string name="err_scan_failed_code">Scan failed: %1$d</string>

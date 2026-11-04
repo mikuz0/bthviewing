@@ -41,6 +41,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 private val TempColor = Color(0xFF2E7D32)   // green 800
 private val HumiColor = Color(0xFF1565C0)   // blue 800
@@ -52,6 +53,7 @@ private val CrosshairColor = Color(0xFF000000).copy(alpha = 0.6f)
 fun HistoryChart(
     records: List<com.example.bthviewing.MemoRecord>,
     periodLabel: String = "day",      // "6h" | "day" | "week" | "month" | "year"
+    showLocalTime: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val data = remember(records) { ChartData.from(records) }
@@ -66,7 +68,10 @@ fun HistoryChart(
 
     val textMeasurer = rememberTextMeasurer()
 
-    // Форматы подписей
+    // Явное смещение часового пояса
+    val offsetMs = remember { TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong() }
+
+    // Форматы подписей — без TimeZone
     val hmFmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val dmFmt = remember { SimpleDateFormat("dd.MM", Locale.getDefault()) }
     val myFmt = remember { SimpleDateFormat("MMM yyyy", Locale.getDefault()) }
@@ -122,8 +127,9 @@ fun HistoryChart(
                     )
                     Text("%.1f %%".format(p.humi), style = valueStyle)
                     Spacer(Modifier.width(16.dp))
+                    val pointTimeMs = if (showLocalTime) p.x * 1000L + offsetMs else p.x * 1000L
                     Text(
-                        pointFmt.format(Date(p.x * 1000L)),
+                        pointFmt.format(Date(pointTimeMs)),
                         style = valueStyle.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                 }
@@ -211,8 +217,9 @@ fun HistoryChart(
                     strokeWidth = 1f
                 )
                 val tSec = data.timeMin + (data.timeSpan * f).toLong()
-                val date = Date(tSec * 1000L)
-                val cal = Calendar.getInstance().apply { timeInMillis = tSec * 1000L }
+                val adjustedTSec = if (showLocalTime) tSec + offsetMs / 1000 else tSec
+                val date = Date(adjustedTSec * 1000L)
+                val cal = Calendar.getInstance().apply { timeInMillis = adjustedTSec * 1000L }
                 val day = cal.get(Calendar.DAY_OF_YEAR)
                 val month = cal.get(Calendar.MONTH)
 

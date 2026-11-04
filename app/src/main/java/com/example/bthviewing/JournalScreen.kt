@@ -25,6 +25,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -33,6 +34,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.wifi.WifiManager
+import java.util.TimeZone
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -95,6 +97,12 @@ fun JournalScreen(
     }
 
     var isWifiEnabled by remember { mutableStateOf(!WifiStatus.text(context).contains(context.getString(R.string.wifi_on))) }
+
+    val journalPrefs = remember { context.getSharedPreferences("journal_prefs", Context.MODE_PRIVATE) }
+    var showLocalTime by remember { mutableStateOf(journalPrefs.getBoolean("show_local_time", false)) }
+    LaunchedEffect(showLocalTime) {
+        journalPrefs.edit().putBoolean("show_local_time", showLocalTime).apply()
+    }
 
     LaunchedEffect(state.exportMessage) {
         if (state.exportMessage != null) {
@@ -177,6 +185,31 @@ fun JournalScreen(
         }
 
         Spacer(Modifier.height(8.dp))
+
+        // ---------- Переключатель времени ----------
+        if (state.records.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (showLocalTime) stringResource(R.string.time_mode_local)
+                           else stringResource(R.string.time_mode_utc),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(8.dp))
+                Switch(
+                    checked = showLocalTime,
+                    onCheckedChange = { showLocalTime = it }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.time_mode_label),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
 
         // ---------- Кнопки действий ----------
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -271,7 +304,7 @@ fun JournalScreen(
         // ---------- Сводка объёма ----------
         if (state.records.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            SummaryText(state.records)
+            SummaryText(state.records, showLocalTime)
         }
 
         if (state.records.isNotEmpty()) {
@@ -281,7 +314,7 @@ fun JournalScreen(
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.tab_chart)) })
             }
             if (tab == 0) {
-                RecordsTable(state.records)
+                RecordsTable(state.records, showLocalTime)
             } else {
                 // ---------- Периоды + график ----------
                 Spacer(Modifier.height(8.dp))
@@ -326,6 +359,7 @@ fun JournalScreen(
                             Period.MONTH -> "month"
                             Period.YEAR -> "year"
                         },
+                        showLocalTime = showLocalTime,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -340,7 +374,8 @@ fun JournalScreen(
 /* ----------------------- Сводка объёма ----------------------- */
 
 @Composable
-private fun SummaryText(records: List<MemoRecord>) {
+private fun SummaryText(records: List<MemoRecord>, showLocalTime: Boolean) {
+    val offsetMs = remember { TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong() }
     val fmt = remember { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()) }
     val valid = remember(records) {
         records.filter { it.timeSec > 1_000_000_000L }.sortedBy { it.timeSec }
@@ -353,15 +388,17 @@ private fun SummaryText(records: List<MemoRecord>) {
         )
         return
     }
-    val first = valid.first().timeSec
-    val last = valid.last().timeSec
-    val periodText = formatPeriod(last - first)
+    val first = if (showLocalTime) valid.first().timeSec * 1000L + offsetMs
+                else valid.first().timeSec * 1000L
+    val last = if (showLocalTime) valid.last().timeSec * 1000L + offsetMs
+               else valid.last().timeSec * 1000L
+    val periodText = formatPeriod((last - first) / 1000)
     Text(
         stringResource(
             R.string.summary_records,
             records.size,
-            fmt.format(Date(first * 1000L)),
-            fmt.format(Date(last * 1000L)),
+            fmt.format(Date(first)),
+            fmt.format(Date(last)),
             periodText
         ),
         fontSize = 12.sp,
@@ -426,7 +463,8 @@ private fun formatPeriod(seconds: Long): String = when {
 /* ----------------------- Таблица ----------------------- */
 
 @Composable
-fun RecordsTable(records: List<MemoRecord>) {
+fun RecordsTable(records: List<MemoRecord>, showLocalTime: Boolean) {
+    val offsetMs = remember { TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong() }
     val fmt = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
@@ -439,7 +477,9 @@ fun RecordsTable(records: List<MemoRecord>) {
             items(records) { r ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     val timeText = if (r.timeSec > 1_000_000_000L) {
-                        fmt.format(Date(r.timeSec * 1000))
+                        val timeMs = if (showLocalTime) r.timeSec * 1000L + offsetMs
+                                     else r.timeSec * 1000L
+                        fmt.format(Date(timeMs))
                     } else {
                         "—"
                     }
