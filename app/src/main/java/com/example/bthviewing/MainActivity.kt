@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.location.LocationManager
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
@@ -133,6 +134,23 @@ fun AppRoot(
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
+                    viewModel.refreshBluetoothStatus()
+                }
+            }
+        }
+        context.registerReceiver(receiver, filter)
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
+    }
+    // --------------------------------------------------------------------
+
+    // ---------- BroadcastReceiver для переключения геолокации ------------
+    DisposableEffect(Unit) {
+        val filter = IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION)
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == LocationManager.PROVIDERS_CHANGED_ACTION) {
                     viewModel.refreshBluetoothStatus()
                 }
             }
