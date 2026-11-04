@@ -1,5 +1,9 @@
 package com.example.bthviewing
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,6 +34,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -61,8 +67,6 @@ fun SettingsScreen(
     }
 
     val s by viewModel.sensor.collectAsState()
-
-
 
     val tabs = listOf(
         stringResource(R.string.tab_sensor),
@@ -93,6 +97,8 @@ private fun SensorTab(
     deviceName: String?
 ) {
     val s by vm.sensor.collectAsState()
+    val mainState by mainViewModel.uiState.collectAsState()
+    val bluetoothReady = mainState.bluetoothReady
     val context = LocalContext.current
     val timeFmt = remember { SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()) }
 
@@ -121,15 +127,50 @@ private fun SensorTab(
             Spacer(Modifier.height(8.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
-            val wifiText = remember { WifiStatus.text(context) }
-            Text(
-                text = wifiText,
-                fontSize = 12.sp,
-                color = if (wifiText.contains(stringResource(R.string.wifi_on)))
-                    MaterialTheme.colorScheme.error
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            var wifiText by remember { mutableStateOf(WifiStatus.text(context)) }
+
+            DisposableEffect(context) {
+                val filter = IntentFilter("android.net.wifi.WIFI_STATE_CHANGED")
+                val receiver = object : BroadcastReceiver() {
+                    override fun onReceive(context: Context?, intent: Intent?) {
+                        if (intent?.action == "android.net.wifi.WIFI_STATE_CHANGED") {
+                            wifiText = WifiStatus.text(context ?: return)
+                        }
+                    }
+                }
+                context.registerReceiver(receiver, filter)
+                onDispose {
+                    context.unregisterReceiver(receiver)
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (wifiText.contains(context.getString(R.string.wifi_on)))
+                        "⚠️ Wi-Fi включён"
+                    else
+                        "✅ Wi-Fi выключен",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (wifiText.contains(context.getString(R.string.wifi_on)))
+                        MaterialTheme.colorScheme.error
+                    else
+                        Color(0xFF2E7D32)
+                )
+                Spacer(Modifier.width(16.dp))
+                Text(
+                    text = if (bluetoothReady)
+                        "🔵 Bluetooth включён"
+                    else
+                        "🔴 Bluetooth выключен",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (bluetoothReady)
+                        Color(0xFF2E7D32)
+                    else
+                        MaterialTheme.colorScheme.error
+                )
+            }
             Text(
                 text = stringResource(R.string.wifi_warning),
                 fontSize = 12.sp,
@@ -137,10 +178,11 @@ private fun SensorTab(
             )
         }
 
-        Spacer(Modifier.height(16.dp))
+        if (bluetoothReady) {
+            Spacer(Modifier.height(16.dp))
 
-        // Коэффициенты
-        if (!coefficientsExpanded) {
+            // Коэффициенты
+            if (!coefficientsExpanded) {
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -431,6 +473,15 @@ private fun SensorTab(
         s.clearHistoryError?.let {
             Spacer(Modifier.height(4.dp))
             Text(stringResource(R.string.history_clear_error, it), fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
+        }
+        } else {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.status_bluetooth_off),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error
+            )
         }
     }
 

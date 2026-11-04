@@ -1,6 +1,11 @@
 package com.example.bthviewing
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
@@ -121,6 +126,23 @@ fun AppRoot(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+
+    // ---------- BroadcastReceiver для Bluetooth state changes ----------
+    DisposableEffect(Unit) {
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
+                    viewModel.refreshBluetoothStatus()
+                }
+            }
+        }
+        context.registerReceiver(receiver, filter)
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
+    }
+    // --------------------------------------------------------------------
 
     MaterialTheme(
         colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme()

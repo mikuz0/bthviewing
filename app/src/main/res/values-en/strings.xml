@@ -175,6 +175,9 @@
     <string name="err_device_no_response_ms">Device did not respond within %1$d ms</string>
     <string name="err_bluetooth_off">Bluetooth is off</string>
     <string name="err_no_bluetooth_permission">No Bluetooth permission</string>
+    <string name="status_bluetooth_off">Bluetooth is off</string>
+    <string name="status_bluetooth_on">Bluetooth is on</string>
+    <string name="status_no_permissions">No Bluetooth permission</string>
     <string name="err_scan_failed">Scan error</string>
     <string name="err_device_not_found">Device not found</string>
     <string name="err_reading">Read error</string>

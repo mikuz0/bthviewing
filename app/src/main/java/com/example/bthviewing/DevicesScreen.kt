@@ -115,6 +115,8 @@ fun DevicesScreen(
             }
             Spacer(Modifier.height(8.dp))
             ListeningStatus(
+                bluetoothReady = state.bluetoothReady,
+                hasPermissions = state.hasPermissions,
                 isListening = state.isListening,
                 selectedName = state.selectedName,
                 selectedAddress = state.selectedAddress
@@ -244,6 +246,8 @@ fun DevicesScreen(
 
 @Composable
 fun ListeningStatus(
+    bluetoothReady: Boolean,
+    hasPermissions: Boolean,
     isListening: Boolean,
     selectedName: String?,
     selectedAddress: String?
@@ -257,6 +261,25 @@ fun ListeningStatus(
         return
     }
     val label = selectedName ?: selectedAddress
+
+    if (!bluetoothReady) {
+        Text(
+            text = stringResource(R.string.status_bluetooth_off),
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.error,
+            fontWeight = FontWeight.Bold
+        )
+        return
+    }
+    if (!hasPermissions) {
+        Text(
+            text = stringResource(R.string.status_no_permissions),
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.error,
+            fontWeight = FontWeight.Bold
+        )
+        return
+    }
     if (isListening) {
         Text(
             text = stringResource(R.string.status_listening, label),

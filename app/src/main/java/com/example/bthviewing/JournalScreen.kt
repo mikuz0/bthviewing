@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,7 +28,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.net.wifi.WifiManager
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -65,6 +72,8 @@ fun JournalScreen(
     mainViewModel: MainViewModel
 ) {
     val state by viewModel.uiState.collectAsState()
+    val mainState by mainViewModel.uiState.collectAsState()
+    val bluetoothReady = mainState.bluetoothReady
     val context = LocalContext.current
     val deviceAddress = state.deviceAddress
 
@@ -84,6 +93,8 @@ fun JournalScreen(
             viewModel.exportCsv(uri)
         }
     }
+
+    var isWifiEnabled by remember { mutableStateOf(!WifiStatus.text(context).contains(context.getString(R.string.wifi_on))) }
 
     LaunchedEffect(state.exportMessage) {
         if (state.exportMessage != null) {
@@ -112,15 +123,52 @@ fun JournalScreen(
             Spacer(Modifier.height(8.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
-            val wifiText = remember { WifiStatus.text(context) }
-            Text(
-                text = wifiText,
-                fontSize = 12.sp,
-                color = if (wifiText.contains(stringResource(R.string.wifi_on)))
-                    MaterialTheme.colorScheme.error
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            var wifiText by remember { mutableStateOf(WifiStatus.text(context)) }
+
+            DisposableEffect(context) {
+                val filter = IntentFilter("android.net.wifi.WIFI_STATE_CHANGED")
+                val receiver = object : BroadcastReceiver() {
+                    override fun onReceive(context: Context?, intent: Intent?) {
+                        if (intent?.action == "android.net.wifi.WIFI_STATE_CHANGED") {
+                            val newText = WifiStatus.text(context ?: return)
+                            wifiText = newText
+                            isWifiEnabled = newText.contains(context.getString(R.string.wifi_on))
+                        }
+                    }
+                }
+                context.registerReceiver(receiver, filter)
+                onDispose {
+                    context.unregisterReceiver(receiver)
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (wifiText.contains(context.getString(R.string.wifi_on)))
+                        "⚠️ Wi-Fi включён"
+                    else
+                        "✅ Wi-Fi выключен",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (wifiText.contains(context.getString(R.string.wifi_on)))
+                        MaterialTheme.colorScheme.error
+                    else
+                        Color(0xFF2E7D32)
+                )
+                Spacer(Modifier.width(16.dp))
+                Text(
+                    text = if (bluetoothReady)
+                        "🔵 Bluetooth включён"
+                    else
+                        "🔴 Bluetooth выключен",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (bluetoothReady)
+                        Color(0xFF2E7D32)
+                    else
+                        MaterialTheme.colorScheme.error
+                )
+            }
             Text(
                 text = stringResource(R.string.wifi_warning),
                 fontSize = 12.sp,
@@ -137,7 +185,7 @@ fun JournalScreen(
                     mainViewModel.stopListening()
                     viewModel.startRead()
                 },
-                enabled = state.deviceAddress != null && !state.isReading
+                enabled = state.deviceAddress != null && !state.isReading && !isWifiEnabled && bluetoothReady
             ) {
                 Text(
                     if (state.isReading) stringResource(R.string.btn_reading)
@@ -159,23 +207,25 @@ fun JournalScreen(
                     )
                 }
             }
-            Spacer(Modifier.width(12.dp))
-            OutlinedButton(
-                onClick = {
-                    val suggested = CsvExporter.defaultFileName(
-                        state.deviceName ?: state.deviceAddress
-                    )
-                    exportLauncher.launch(suggested)
-                },
-                enabled = state.records.isNotEmpty() && !state.isExporting
-            ) {
-                if (state.isExporting) {
-                    CircularProgressIndicator(Modifier.height(18.dp).width(18.dp))
-                } else {
-                    Icon(Icons.Default.Share, contentDescription = null)
+            if (!state.isReading) {
+                Spacer(Modifier.width(12.dp))
+                OutlinedButton(
+                    onClick = {
+                        val suggested = CsvExporter.defaultFileName(
+                            state.deviceName ?: state.deviceAddress
+                        )
+                        exportLauncher.launch(suggested)
+                    },
+                    enabled = state.records.isNotEmpty() && !state.isExporting
+                ) {
+                    if (state.isExporting) {
+                        CircularProgressIndicator(Modifier.height(18.dp).width(18.dp))
+                    } else {
+                        Icon(Icons.Default.Share, contentDescription = null)
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.btn_export_csv))
                 }
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.btn_export_csv))
             }
         }
 

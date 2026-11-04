@@ -26,7 +26,9 @@ data class UiState(
     val isListening: Boolean = false,
     val showOnlyBthome: Boolean = false,
     val darkTheme: Boolean = false,
-    val lockPortrait: Boolean = false
+    val lockPortrait: Boolean = false,
+    val bluetoothReady: Boolean = false,
+    val hasPermissions: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -63,7 +65,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             selectedName = prefs.getString(KEY_SELECTED_NAME, null),
             showOnlyBthome = prefs.getBoolean(KEY_SHOW_ONLY_BTHOME, false),
             darkTheme = appPrefs.getBoolean(KEY_DARK, false),
-            lockPortrait = appPrefs.getBoolean(KEY_LOCK_PORTRAIT, false)
+            lockPortrait = appPrefs.getBoolean(KEY_LOCK_PORTRAIT, false),
+            bluetoothReady = scanner.isBluetoothReady(),
+            hasPermissions = scanner.hasPermissions()
         ).let { s ->
             val cached = s.selectedAddress?.let { loadCachedReading(it) }
             s.copy(
@@ -96,6 +100,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (isAppInForeground) return
         Log.d(TAG, "onAppForeground: resume listening")
         isAppInForeground = true
+        _uiState.value = _uiState.value.copy(
+            bluetoothReady = scanner.isBluetoothReady(),
+            hasPermissions = scanner.hasPermissions()
+        )
         startListening()
     }
 
@@ -108,6 +116,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Log.d(TAG, "onAppBackground: stop listening")
         isAppInForeground = false
         stopListening()
+    }
+
+    /**
+     * Обновить статус Bluetooth (вызывается из BroadcastReceiver при переключении).
+     */
+    fun refreshBluetoothStatus() {
+        _uiState.value = _uiState.value.copy(
+            bluetoothReady = scanner.isBluetoothReady(),
+            hasPermissions = scanner.hasPermissions()
+        )
     }
 
     // ---------------------------------------------------- Настройки приложения -
@@ -203,7 +221,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun stopListening() {
         listenJob?.cancel()
         listenJob = null
-        _uiState.value = _uiState.value.copy(isListening = false)
+        _uiState.value = _uiState.value.copy(
+            bluetoothReady = scanner.isBluetoothReady(),
+            hasPermissions = scanner.hasPermissions(),
+            isListening = false
+        )
     }
 
     fun startListening() {
@@ -214,7 +236,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.isRefreshingList) return
         if (!isAppInForeground) return
 
-        _uiState.value = _uiState.value.copy(isListening = true)
+        _uiState.value = _uiState.value.copy(
+            bluetoothReady = scanner.isBluetoothReady(),
+            hasPermissions = scanner.hasPermissions(),
+            isListening = true
+        )
 
         listenJob = viewModelScope.launch {
             try {
@@ -246,7 +272,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = current.copy(
             selectedAddress = address,
             selectedName = name ?: reading?.deviceName,
-            lastReading = reading
+            lastReading = reading,
+            bluetoothReady = scanner.isBluetoothReady(),
+            hasPermissions = scanner.hasPermissions()
         )
 
         prefs.edit()
