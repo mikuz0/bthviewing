@@ -147,9 +147,9 @@ private fun SensorTab(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = if (wifiText.contains(context.getString(R.string.wifi_on)))
-                        "⚠️ Wi-Fi включён"
+                        context.getString(R.string.wifi_on_status)
                     else
-                        "✅ Wi-Fi выключен",
+                        context.getString(R.string.wifi_off_status),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (wifiText.contains(context.getString(R.string.wifi_on)))
@@ -160,9 +160,9 @@ private fun SensorTab(
                 Spacer(Modifier.width(16.dp))
                 Text(
                     text = if (bluetoothReady)
-                        "🔵 Bluetooth включён"
+                        context.getString(R.string.bluetooth_on_status)
                     else
-                        "🔴 Bluetooth выключен",
+                        context.getString(R.string.bluetooth_off_status),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (bluetoothReady)

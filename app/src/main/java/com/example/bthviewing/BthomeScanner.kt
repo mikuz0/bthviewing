@@ -82,7 +82,7 @@ class BthomeScanner(private val context: Context) {
     ): Flow<ScannedDevice> = callbackFlow {
         val scanner = bluetoothAdapter?.bluetoothLeScanner
         if (scanner == null) {
-            close(IllegalStateException("BLE scanner недоступен"))
+            close(IllegalStateException(context.getString(R.string.err_ble_scanner_unavailable)))
             return@callbackFlow
         }
 
@@ -129,7 +129,7 @@ class BthomeScanner(private val context: Context) {
 
             override fun onScanFailed(errorCode: Int) {
                 Log.e(TAG, "onScanFailed: $errorCode")
-                close(IllegalStateException("Scan failed: $errorCode"))
+                close(IllegalStateException(context.getString(R.string.err_scan_failed_code, errorCode)))
             }
         }
 

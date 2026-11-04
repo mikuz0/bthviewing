@@ -190,9 +190,17 @@
     <string name="time_mode_label">Show local time</string>
     <string name="time_mode_utc">UTC</string>
     <string name="time_mode_local">Local</string>
+
+    <!-- Wi-Fi status -->
+    <string name="wifi_on_status">⚠️ Wi-Fi on</string>
+    <string name="wifi_off_status">✅ Wi-Fi off</string>
+    <!-- Bluetooth status -->
+    <string name="bluetooth_on_status">🔵 Bluetooth on</string>
+    <string name="bluetooth_off_status">🔴 Bluetooth off</string>
     <string name="err_export">Export error</string>
     <string name="err_no_response">No response from device</string>
     <string name="err_scan_failed_code">Scan failed: %1$d</string>
+    <string name="err_ble_scanner_unavailable">BLE scanner unavailable</string>
     <string name="err_read_time">Time read error</string>
     <string name="err_set_time">Time set error</string>
     <string name="err_clear_history">History clear error</string>
