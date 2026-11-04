@@ -96,7 +96,7 @@ fun JournalScreen(
         }
     }
 
-    var isWifiEnabled by remember { mutableStateOf(!WifiStatus.text(context).contains(context.getString(R.string.wifi_on))) }
+    var isWifiEnabled by remember { mutableStateOf(WifiStatus.text(context).contains(context.getString(R.string.wifi_on))) }
 
     val journalPrefs = remember { context.getSharedPreferences("journal_prefs", Context.MODE_PRIVATE) }
     var showLocalTime by remember { mutableStateOf(journalPrefs.getBoolean("show_local_time", false)) }
