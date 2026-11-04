@@ -80,6 +80,7 @@ class GattMemoClient(private val context: Context) {
         var recordsRead = 0
         var connected = false
         var finished = false
+        var retryCount = 0
 
         fun closeGatt() {
             val g = gatt ?: return
@@ -129,11 +130,21 @@ class GattMemoClient(private val context: Context) {
             override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
                 Log.d(TAG, "onConnectionStateChange status=$status newState=$newState")
                 if (status != BluetoothGatt.GATT_SUCCESS) {
-                    if (status == 133) {
-                        fail(context.getString(R.string.err_ble_133))
-                    } else {
-                        fail(context.getString(R.string.err_gatt_status, status))
+                    if (status == 133 && retryCount < 2) {
+                        retryCount++
+                        Log.w(TAG, "GATT 133 retry #$retryCount")
+                        try { g.disconnect() } catch (_: Exception) {}
+                        try { g.close() } catch (_: Exception) {}
+                        val self = this
+                        launch {
+                            delay(3000)
+                            if (finished) return@launch
+                            connected = false
+                            gatt = device.connectGatt(context, false, self, BluetoothDevice.TRANSPORT_LE)
+                        }
+                        return
                     }
+                    fail(if (status == 133) context.getString(R.string.err_ble_133) else context.getString(R.string.err_gatt_status, status))
                     return
                 }
                 when (newState) {
