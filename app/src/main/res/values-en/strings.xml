@@ -178,6 +178,8 @@
     <string name="status_bluetooth_off">Bluetooth is off</string>
     <string name="status_bluetooth_on">Bluetooth is on</string>
     <string name="status_no_permissions">No Bluetooth permission</string>
+    <string name="status_location_off">Enable location. It is required for device discovery on this Android version.</string>
+    <string name="err_location_off">Location is off</string>
     <string name="err_scan_failed">Scan error</string>
     <string name="err_device_not_found">Device not found</string>
     <string name="err_reading">Read error</string>

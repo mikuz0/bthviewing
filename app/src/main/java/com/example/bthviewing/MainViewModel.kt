@@ -2,6 +2,8 @@ package com.example.bthviewing
 
 import android.app.Application
 import android.content.Context
+import android.location.LocationManager
+import android.os.Build
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -28,7 +30,8 @@ data class UiState(
     val darkTheme: Boolean = false,
     val lockPortrait: Boolean = false,
     val bluetoothReady: Boolean = false,
-    val hasPermissions: Boolean = false
+    val hasPermissions: Boolean = false,
+    val locationEnabled: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -52,6 +55,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         fun isStale(reading: BthomeData): Boolean =
             System.currentTimeMillis() - reading.timestamp > STALE_THRESHOLD_MS
+
+        /** Проверка включена ли геолокация (только для API ≤ 30). */
+        fun isLocationEnabled(context: Context): Boolean {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) return true
+            val lm = context.applicationContext
+                .getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return true
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                lm.isLocationEnabled
+            } else {
+                lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                        lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+            }
+        }
     }
 
     private val prefs = application.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -67,7 +83,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             darkTheme = appPrefs.getBoolean(KEY_DARK, false),
             lockPortrait = appPrefs.getBoolean(KEY_LOCK_PORTRAIT, false),
             bluetoothReady = scanner.isBluetoothReady(),
-            hasPermissions = scanner.hasPermissions()
+            hasPermissions = scanner.hasPermissions(),
+            locationEnabled = isLocationEnabled(getApplication())
         ).let { s ->
             val cached = s.selectedAddress?.let { loadCachedReading(it) }
             s.copy(
@@ -102,7 +119,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         isAppInForeground = true
         _uiState.value = _uiState.value.copy(
             bluetoothReady = scanner.isBluetoothReady(),
-            hasPermissions = scanner.hasPermissions()
+            hasPermissions = scanner.hasPermissions(),
+            locationEnabled = isLocationEnabled(getApplication())
         )
         startListening()
     }
@@ -124,7 +142,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshBluetoothStatus() {
         _uiState.value = _uiState.value.copy(
             bluetoothReady = scanner.isBluetoothReady(),
-            hasPermissions = scanner.hasPermissions()
+            hasPermissions = scanner.hasPermissions(),
+            locationEnabled = isLocationEnabled(getApplication())
         )
     }
 
@@ -153,6 +172,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!scanner.hasPermissions()) {
             _uiState.value = _uiState.value.copy(
                 error = getApplication<Application>().getString(R.string.err_no_bluetooth_permission)
+            )
+            return
+        }
+        if (!isLocationEnabled(getApplication())) {
+            _uiState.value = _uiState.value.copy(
+                error = getApplication<Application>().getString(R.string.err_location_off)
             )
             return
         }
@@ -224,6 +249,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(
             bluetoothReady = scanner.isBluetoothReady(),
             hasPermissions = scanner.hasPermissions(),
+            locationEnabled = isLocationEnabled(getApplication()),
             isListening = false
         )
     }
@@ -233,12 +259,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (listenJob?.isActive == true) return
         if (!scanner.isBluetoothReady()) return
         if (!scanner.hasPermissions()) return
+        if (!isLocationEnabled(getApplication())) return
         if (_uiState.value.isRefreshingList) return
         if (!isAppInForeground) return
 
         _uiState.value = _uiState.value.copy(
             bluetoothReady = scanner.isBluetoothReady(),
             hasPermissions = scanner.hasPermissions(),
+            locationEnabled = isLocationEnabled(getApplication()),
             isListening = true
         )
 

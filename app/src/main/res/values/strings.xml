@@ -178,6 +178,8 @@
     <string name="status_bluetooth_off">Bluetooth выключен</string>
     <string name="status_bluetooth_on">Bluetooth включён</string>
     <string name="status_no_permissions">Нет разрешений на Bluetooth</string>
+    <string name="status_location_off">Включите геолокацию. В текущей версии Android она нужна для поиска устройств.</string>
+    <string name="err_location_off">Геолокация выключена</string>
     <string name="err_ble_scanner_unavailable">BLE scanner недоступен</string>
     <string name="err_scan_failed">Ошибка сканирования</string>
     <string name="err_device_not_found">Устройство не найдено</string>
